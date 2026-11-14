@@ -1,0 +1,156 @@
+"use client";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { CreditCard, FileText, GraduationCap, LineChart, MessageCircle, Sparkles, Wallet } from "lucide-react";
+import type { ReactNode } from "react";
+import { useApp } from "@/lib/store";
+import { useSession } from "@/lib/supabase/useSession";
+import { Button, Card, cn } from "./ui";
+import { TutorPanel } from "./TutorPanel";
+
+/** The four MVP features. `match` = paths that highlight the tab. */
+export const FEATURES = [
+  { href: "/advisor", label: "Financial Advisor", short: "Advisor", icon: LineChart, match: ["/advisor", "/paycheck", "/credit"] },
+  { href: "/taxes", label: "Tax Assistant", short: "Taxes", icon: FileText, match: ["/taxes"] },
+  { href: "/academy", label: "Academy", short: "Academy", icon: GraduationCap, match: ["/academy"] },
+  { href: "/finpilot", label: "FinPilot", short: "FinPilot", icon: MessageCircle, match: ["/finpilot"] },
+];
+
+/** Pages that work with Maya's demo or your own numbers. */
+const NEEDS_PROFILE = ["/advisor", "/paycheck", "/credit"];
+
+export function Logo() {
+  return (
+    <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight text-ink">
+      <span className="grid h-8 w-8 place-items-center rounded-lg bg-ink text-sm font-bold text-mint">F</span>
+      <span>FirstFunds</span>
+    </Link>
+  );
+}
+
+export function AdvisorTabs() {
+  const path = usePathname();
+  const tabs = [
+    { href: "/advisor", label: "Overview", icon: LineChart },
+    { href: "/paycheck", label: "Paycheck", icon: Wallet },
+    { href: "/credit", label: "Credit card", icon: CreditCard },
+  ];
+  return (
+    <nav aria-label="Financial Advisor" className="mb-6 flex gap-1 overflow-x-auto rounded-2xl border border-line bg-white p-1">
+      {tabs.map((t) => (
+        <Link
+          key={t.href}
+          href={t.href}
+          aria-current={path === t.href ? "page" : undefined}
+          className={cn(
+            "flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold transition-colors",
+            path === t.href ? "bg-ink text-white" : "text-ink-2 hover:bg-black/5",
+          )}
+        >
+          <t.icon size={15} /> {t.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+export function AppShell({ children }: { children: ReactNode }) {
+  const path = usePathname();
+  const router = useRouter();
+  const { profile, setTutorOpen, loadDemo, startFresh } = useApp();
+  const auth = useSession();
+  const needsProfile = NEEDS_PROFILE.some((p) => path.startsWith(p));
+  const active = FEATURES.find((f) => f.match.some((m) => path.startsWith(m)));
+
+  return (
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-20 border-b border-line bg-paper/85 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
+          <Logo />
+          <nav aria-label="Features" className="hidden items-center gap-1 md:flex">
+            {FEATURES.map((f) => {
+              const on = f === active;
+              return (
+                <Link
+                  key={f.href}
+                  href={f.href}
+                  aria-current={on ? "page" : undefined}
+                  className={cn(
+                    "flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+                    on ? "bg-ink text-white" : "text-ink-2 hover:bg-black/5 hover:text-ink",
+                  )}
+                >
+                  <f.icon size={15} className={on ? "text-mint" : ""} />
+                  {f.label}
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="flex items-center gap-2">
+            {auth.configured && !auth.loading && (
+              <Link href="/account" className="hidden rounded-full border border-line bg-white px-3 py-1.5 text-sm font-medium text-ink-2 hover:text-ink sm:block">
+                {auth.label ?? "Sign in"}
+              </Link>
+            )}
+            {profile?.isDemo && (
+              <span className="hidden items-center gap-2 rounded-full border border-line bg-white px-3 py-1 text-sm lg:flex">
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-brand-soft text-xs font-bold text-brand-2">M</span>
+                Maya <span className="text-xs text-ink-3">· demo</span>
+              </span>
+            )}
+            {!path.startsWith("/finpilot") && (
+              <Button variant="primary" onClick={() => setTutorOpen(true)} className="py-2">
+                <Sparkles size={16} /> <span className="sr-only sm:not-sr-only">Ask FinPilot</span>
+              </Button>
+            )}
+          </div>
+        </div>
+        {/* Mobile feature tabs */}
+        <nav aria-label="Features" className="grid grid-cols-4 gap-1 px-3 pb-2 md:hidden">
+          {FEATURES.map((f) => (
+            <Link
+              key={f.href}
+              href={f.href}
+              className={cn(
+                "flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[11px] font-semibold",
+                f === active ? "bg-ink text-white" : "text-ink-2",
+              )}
+            >
+              <f.icon size={16} />
+              {f.short}
+            </Link>
+          ))}
+        </nav>
+      </header>
+
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:py-10">
+        {!needsProfile || profile ? (
+          children
+        ) : (
+          <Card className="mx-auto max-w-lg text-center">
+            <h2 className="text-xl font-semibold">See it with real numbers</h2>
+            <p className="mt-2 text-ink-2">
+              Load Maya&apos;s sample finances to explore, or start with your own paycheck and card. No personal info needed.
+            </p>
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+              <Button onClick={loadDemo}>
+                <Sparkles size={16} /> Try Maya&apos;s demo
+              </Button>
+              <Button variant="secondary" onClick={() => startFresh("You")}>
+                Use my own numbers
+              </Button>
+              <Button variant="ghost" onClick={() => router.push("/")}>
+                Home
+              </Button>
+            </div>
+          </Card>
+        )}
+      </main>
+      <footer className="mx-auto max-w-6xl px-4 pb-10 text-xs leading-relaxed text-ink-3">
+        Educational guidance only. FirstFunds isn&apos;t a licensed financial advisor or tax preparer and doesn&apos;t file tax returns. Nothing is
+        saved after you close the tab unless you sign in. <Link href="/methodology" className="underline">How we calculate</Link>
+      </footer>
+      <TutorPanel />
+    </div>
+  );
+}

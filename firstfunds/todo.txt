@@ -1,0 +1,31 @@
+FirstFunds is now a full Next.js web app, in firstfunds.zip, built around your four features. It deploys to Vercel as-is, and adding Supabase turns on sign-in and saved progress. I also updated the hosted FirstFunds page you had with the same four features. All 32 tests pass, and I clicked through every feature in a browser on desktop and phone sizes with no errors.
+
+The four features:
+
+Financial Advisor: a money snapshot page with next steps based on your numbers, plus the paycheck breakdown and credit card simulator as tabs.
+Tax Assistant: the fewest-questions tax flow from before, now with a “Save across devices” option.
+Financial Advisory Academy (new, marked “Only on FirstFunds” on the home page): 10 short lessons in 3 modules covering W-2s, Social Security and Medicare, withholding, filing status, the standard deduction, tax brackets, whether your parents can claim you, deadlines, side gigs, and IRS scams.
+Each lesson has short cards, most have a hands-on example using the same tax math as the Tax Assistant, and all end with a quiz.
+You earn XP and badges, and every lesson links to IRS.gov.
+A test checks that the dollar amounts in the lessons match the tax engine, so they can’t drift apart.
+FinPilot: the tutor, renamed. It now also answers questions about using the app, like “How do I upload my W-2?”, “Can I delete my data?” and “Does FirstFunds file my taxes?”. It can explain any Academy lesson further, and the “Ask FinPilot” button is on every page.
+
+Vercel: import the repo and deploy; no setup is needed. Open /api/health after deploying to see which keys are active. I added time limits and per-visitor rate limits on the Gemini routes so a public site can’t run up your bill.
+
+Supabase:
+
+Sign-in: email sign-in links with no password, or “Continue as a guest”.
+What syncs: Tax Assistant progress and Academy progress, across devices.
+Deleting: people can delete their saved data from the account page.
+Setup: paste the SQL file from supabase/migrations into Supabase’s SQL editor, then turn on email sign-in and add your site’s address in Supabase’s Authentication settings. The README walks through it.
+Keys: Vercel’s Supabase integration sets NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, and older projects use the anon key instead. The app accepts either. 
+supabase
+Security: each user can only read or change their own data, and signed-out visitors can’t read anything. I tested those rules on a real Postgres database with a stand-in for Supabase’s login system.
+
+Not tested yet: I couldn’t try a real Supabase project or Gemini from here, since there are no keys and outside network access is blocked. With placeholder settings, the sign-in screens appear and show a clear error message when they can’t connect. Do one real sign-in and check that progress syncs once your keys are in.
+
+Your computer is connected to this chat now, so I can put the project in a folder there and start it for you if you’d like.
+
+Sources:
+
+Supabase docs: https://supabase.com/docs/guides/integrations/vercel-preview-branches.md
