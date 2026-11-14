@@ -1,6 +1,11 @@
 // First-paycheck breakdown. Educational estimate — actual withholding depends on
 // the employee's Form W-4 and IRS Publication 15-T.
 import { bracketTax, STANDARD_DEDUCTION, type FilingStatus } from "./tax2025";
+import {
+  calculateCrossBorderTax,
+  type TaxLocation,
+  type CrossBorderTaxResult,
+} from "./localTax";
 
 export type PayFrequency = "weekly" | "biweekly" | "semimonthly" | "monthly";
 
@@ -15,7 +20,13 @@ export type PaycheckInputs = {
   grossPerPeriod: number;
   frequency: PayFrequency;
   filingStatus: FilingStatus;
-  stateTaxRatePct: number; // simple flat estimate
+  stateTaxRatePct: number; // combined state, county, and city rate
+  hometown?: string; // residence hometown, e.g. "Trenton, NJ"
+  workHometown?: string; // workplace hometown if different, e.g. "New York, NY"
+  isDifferentWorkLocation?: boolean; // true if commuter/works in different place
+  location?: TaxLocation;
+  crossBorder?: CrossBorderTaxResult;
+  isManualOverride?: boolean;
 };
 
 // FICA (employee share)
@@ -27,10 +38,15 @@ export type PaycheckResult = {
   federal: number;
   socialSecurity: number;
   medicare: number;
-  state: number;
+  state: number; // total state + local (kept for backward compatibility)
+  stateTax: number;
+  countyTax: number;
+  cityTax: number;
   net: number;
   annualGross: number;
   annualNet: number;
+  location: TaxLocation;
+  crossBorder: CrossBorderTaxResult;
 };
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -42,16 +58,42 @@ export function computePaycheck(p: PaycheckInputs): PaycheckResult {
   const federal = r2(annualFederal / periods);
   const socialSecurity = r2(p.grossPerPeriod * SOCIAL_SECURITY_RATE);
   const medicare = r2(p.grossPerPeriod * MEDICARE_RATE);
-  const state = r2((p.grossPerPeriod * p.stateTaxRatePct) / 100);
+
+  // Dynamically compute cross-border tax taking both residence and workplace into account
+  const residenceQuery = p.hometown || p.location?.hometown || "Trenton, NJ";
+  const workQuery = p.isDifferentWorkLocation && p.workHometown ? p.workHometown : residenceQuery;
+
+  const crossBorder = calculateCrossBorderTax({
+    residenceHometown: residenceQuery,
+    workHometown: workQuery,
+    annualGross: annual,
+    filingStatus: p.filingStatus,
+  });
+
+  // If user explicitly activated the custom rate override slider, honor manual rate
+  const effectiveTotalRate = p.isManualOverride
+    ? p.stateTaxRatePct
+    : crossBorder.totalRatePct;
+
+  const stateTax = r2((p.grossPerPeriod * crossBorder.effectiveStateRatePct) / 100);
+  const countyTax = r2((p.grossPerPeriod * crossBorder.effectiveCountyRatePct) / 100);
+  const cityTax = r2((p.grossPerPeriod * crossBorder.effectiveCityRatePct) / 100);
+  const state = r2((p.grossPerPeriod * effectiveTotalRate) / 100);
   const net = r2(p.grossPerPeriod - federal - socialSecurity - medicare - state);
+
   return {
     gross: p.grossPerPeriod,
     federal,
     socialSecurity,
     medicare,
     state,
+    stateTax,
+    countyTax,
+    cityTax,
     net,
     annualGross: r2(annual),
     annualNet: r2(net * periods),
+    location: crossBorder.residence,
+    crossBorder,
   };
 }
