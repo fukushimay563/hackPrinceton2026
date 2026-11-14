@@ -78,3 +78,39 @@ test("updated_at refreshes on update; rows cascade when the user is deleted", as
   const left = await db.query("select * from public.academy_progress");
   assert.equal(left.rows.length, 0);
 });
+
+// ------------------------------------------------------------------ agent tables
+test("agent memory, links, outbox and audit are private; events are service-only", async () => {
+  const db = await setup();
+  // Service-role writes (superuser here).
+  await db.exec(`
+    insert into public.agent_memory (user_id, kind, payload_enc) values ('${A}', 'validation', 'v1.x.y.z'), ('${B}', 'validation', 'v1.a.b.c');
+    insert into public.message_outbox (idempotency_key, user_id, status) values ('k1', '${A}', 'sent'), ('k2', '${B}', 'sent');
+    insert into public.audit_log (user_id, actor, action) values ('${A}', 'user', 'x'), ('${B}', 'user', 'y');
+    insert into public.photon_events (event_id) values ('evt1');
+  `);
+  for (const table of ["agent_memory", "message_outbox", "audit_log"]) {
+    const rows = await as(db, "authenticated", A, `select user_id from public.${table}`);
+    assert.deepEqual(rows.rows.map((r) => (r as { user_id: string }).user_id), [A], table);
+  }
+  // Users can't write agent memory or audit entries directly.
+  await assert.rejects(as(db, "authenticated", A, "insert into public.agent_memory (user_id, kind, payload_enc) values ($1, 'pattern', 'x')", [A]));
+  await assert.rejects(as(db, "authenticated", A, "insert into public.audit_log (user_id, actor, action) values ($1, 'agent', 'fake')", [A]));
+  await assert.rejects(as(db, "authenticated", A, "select * from public.photon_events"));
+  // Consent link: own only.
+  await as(db, "authenticated", A, "insert into public.channel_links (phone, user_id, notify_consent) values ('+15555550123', $1, true)", [A]);
+  await assert.rejects(as(db, "authenticated", A, "insert into public.channel_links (phone, user_id) values ('+15555550124', $1)", [B]));
+  const bSees = await as(db, "authenticated", B, "select phone from public.channel_links");
+  assert.equal(bSees.rows.length, 0);
+  // Duplicate event ids are rejected by the primary key.
+  await assert.rejects(db.exec("insert into public.photon_events (event_id) values ('evt1')"));
+});
+
+test("shared knowledge rejects identifiers and amounts", async () => {
+  const db = await setup();
+  await db.exec("insert into public.shared_knowledge (kind, note) values ('pattern', 'Sign the raw body bytes, not re-serialized JSON')");
+  await assert.rejects(db.exec("insert into public.shared_knowledge (kind, note) values ('pattern', 'user 123-45-6789')"));
+  await assert.rejects(db.exec("insert into public.shared_knowledge (kind, note) values ('pattern', 'refund was $215')"));
+  const rows = await as(db, "authenticated", A, "select note from public.shared_knowledge");
+  assert.equal(rows.rows.length, 1);
+});
