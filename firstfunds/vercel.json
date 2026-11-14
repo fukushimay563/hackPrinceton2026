@@ -2,17 +2,45 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "functions": {
-    "src/app/api/tutor/route.ts": { "maxDuration": 30 },
-    "src/app/api/w2-extract/route.ts": { "maxDuration": 30 }
+    "src/app/api/tutor/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/w2-extract/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/photon/webhook/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/agents/demo/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/agents/clarify/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/agents/approve/route.ts": {
+      "maxDuration": 60
+    }
   },
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
-        { "key": "X-Frame-Options", "value": "DENY" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        }
       ]
     }
   ]
