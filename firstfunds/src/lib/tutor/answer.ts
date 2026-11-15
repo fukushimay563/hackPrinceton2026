@@ -2,7 +2,7 @@
 // Gemini when configured (with read-only banking tools for the web demo), otherwise
 // the deterministic offline answerer. Never invents figures; cites the sources it used.
 import type { Content } from "@google/genai";
-import { describeGeminiError, geminiClient, geminiModel } from "@/lib/server/gemini";
+import { describeGeminiError, geminiClient, geminiModel, logGeminiRequest } from "@/lib/server/gemini";
 import { gatherSources } from "@/lib/tutor/sources";
 import { offlineAnswer, OFFLINE_FALLBACK } from "@/lib/tutor/offline";
 import type { TutorContext } from "@/lib/tutor/context";
@@ -26,19 +26,41 @@ Rules:
 const MESSAGE_FALLBACK =
   "I don't have a verified source for that, so I won't guess. I can explain things like credit card APR, credit utilization, paychecks and withholding, W-2s, refunds and the 2025 standard deduction. IRS.gov and ConsumerFinance.gov are good places to check anything else.";
 
-export type FinPilotAnswer = { answer: string; sources: { title: string; url: string }[]; mode: "gemini" | "offline"; fallbackReason?: string };
+export type FinPilotAnswer = {
+  answer: string;
+  sources: { title: string; url: string }[];
+  mode: "gemini" | "offline";
+  fallbackReason?: string;
+  /** Model requested from Gemini (gemini answers only). */
+  model?: string;
+  /** Model version Google reports actually served the answer, when it reports one. */
+  servedBy?: string;
+};
 
 /** Context with no personal numbers (used for messaging channels and anonymous askers). */
 export const GENERAL_CONTEXT = { currentPage: "imessage", paycheck: null, creditCard: null, taxes: null } as unknown as TutorContext;
 
-export async function answerQuestion(opts: {
+type AnswerOpts = {
   question: string;
   context: TutorContext;
   history?: { role: "user" | "assistant"; content: string }[];
   /** Read-only access to the demo banking data (web demo only). */
   bankingTools?: boolean;
   channel?: "web" | "message";
-}): Promise<FinPilotAnswer> {
+};
+
+export async function answerQuestion(opts: AnswerOpts): Promise<FinPilotAnswer> {
+  const res = await answerCore(opts);
+  // Safe diagnostics: model + outcome only (no question, answer or figures).
+  logGeminiRequest(opts.channel === "message" ? "imessage-advisor" : "web-advisor", {
+    outcome: res.mode,
+    servedBy: res.servedBy,
+    reason: res.mode === "offline" ? (res.fallbackReason ?? (geminiClient() ? undefined : "GEMINI_API_KEY is not set")) : undefined,
+  });
+  return res;
+}
+
+async function answerCore(opts: AnswerOpts): Promise<FinPilotAnswer> {
   const { question, context } = opts;
   const useBanking = opts.bankingTools ?? true;
   const sources = gatherSources(question);
@@ -82,11 +104,10 @@ export async function answerQuestion(opts: {
         res = await ai.models.generateContent({ model, contents, config });
       }
       const text = res.text?.trim();
-      if (text) return { answer: text, sources: sourceList, mode: "gemini" };
+      if (text) return { answer: text, sources: sourceList, mode: "gemini", model, servedBy: res.modelVersion };
       fallbackReason = "Gemini returned an empty answer.";
     } catch (err) {
       fallbackReason = describeGeminiError(err);
-      console.error("Gemini unavailable, using offline FinPilot:", fallbackReason);
     }
   }
 

@@ -33,7 +33,7 @@
 1. Get a Gemini key into `.env.local`, then test the tutor + W-2 upload with a sample W-2 image (use the IRS sample, not a real one).
 2. If a LangChain prize exists: ingest Pub 17, Pub 501 and the Form 1040 instructions (PDFs) into a vector store, and replace `retrieve()` in `src/lib/tutor/retrieve.ts`. Keep the API route contract (`{answer, sources, mode}`) unchanged.
 3. Nessie: create customer → credit card account → ~12 purchases in the sandbox, set `NESSIE_ACCOUNT_ID`, and confirm the "Capital One Nessie sandbox" badge appears on /credit. Map Nessie merchant categories (currently round-robin placeholders).
-4. Confirm the Gemini model name (`GEMINI_MODEL`); the default is `gemini-flash-latest`.
+4. Confirm the Gemini model name (`GEMINI_MODEL`); the fallback is defined once in `src/lib/server/geminiModel.mjs`.
 
 **Dev 4 — Frontend, deploy, demo**
 1. Deploy to Vercel (or Vultr if it's a prize track). Set env vars there.

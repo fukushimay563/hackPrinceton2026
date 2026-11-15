@@ -72,7 +72,7 @@ iMessage ─► Photon 2.0 (Beta) ─► POST /api/photon/webhook   (event: mess
 ```bash
 npm install
 npm run dev                 # open http://localhost:3000/agents
-npm test                    # 81 tests (6 files)
+npm test                    # 88 tests (7 files)
 ```
 
 **Two-minute demo (mock mode, synthetic data):**
@@ -85,7 +85,7 @@ npm test                    # 81 tests (6 files)
 
 ## Activating real channels
 
-**Gemini:** set `GEMINI_API_KEY` (optionally `GEMINI_MODEL`). Untested here (no key): test the full demo, and watch that the model follows the delegation order. The server-side verification fallback still guards the reply.
+**Gemini:** set `GEMINI_API_KEY` (optionally `GEMINI_MODEL`; one resolver, `src/lib/server/geminiModel.mjs`, serves every AI path). Untested here (no key): test the full demo, and watch that the model follows the delegation order. The server-side verification fallback still guards the reply.
 
 **Photon iMessage (live, Photon 2.0 Beta):**
 
