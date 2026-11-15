@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Badge, Card, cn } from "@/components/ui";
 import { motion } from "framer-motion";
-import { AGENT_META, AgentStatusBoard, type AgentEvent } from "@/components/AgentActivity";
+import { AGENT_META, AgentActivityIndicator, AgentStatusBoard, type AgentEvent } from "@/components/AgentActivity";
 
 type Check = { name: string; pass: boolean; detail: string };
 type Run = {
@@ -147,7 +147,8 @@ export default function AgentConsole() {
     setSecurity([]);
   }
 
-  const v = run?.verification;
+  const replaying = !!run && shown < run.events.length;
+  const v = replaying ? undefined : run?.verification;
   const b = run?.calculation?.breakdown;
   const refundVerified = v?.verifiedClaims.includes("Refund or amount owed");
 
@@ -178,10 +179,10 @@ export default function AgentConsole() {
       <div className="grid gap-6 lg:grid-cols-[340px_1fr_360px]">
         {/* Phone */}
         <div className="mx-auto w-full max-w-[340px]">
-          <div className="rounded-[2.2rem] border-8 border-ink bg-ink shadow-xl">
+          <div className="rounded-[2.2rem] border-8 border-ink bg-obsidian shadow-xl">
             <div className="rounded-[1.6rem] bg-card">
               <div className="border-b border-line px-4 py-3 text-center">
-                <div className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-brand text-sm font-bold text-on-brand">F</div>
+                <div className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-accent text-sm font-bold text-on-accent">F</div>
                 <div className="mt-1 text-xs font-semibold">FinPilot</div>
                 <div className="text-[10px] text-ink-3">iMessage via Photon {modes?.photon === "mock" ? "(mock)" : ""}</div>
               </div>
@@ -206,7 +207,7 @@ export default function AgentConsole() {
               </div>
               <div className="flex flex-wrap gap-1 px-3 pb-2">
                 {QUICK.map((q) => (
-                  <button key={q} onClick={() => send(q)} disabled={busy} className="rounded-full border border-line px-2.5 py-1 text-[11px] font-medium text-ink-2 hover:border-ink-3 disabled:opacity-40">
+                  <button key={q} onClick={() => send(q)} disabled={busy} className="rounded-md border border-line px-2.5 py-1 text-[11px] font-medium text-ink-2 hover:border-ink-3 disabled:opacity-40">
                     {q}
                   </button>
                 ))}
@@ -221,7 +222,7 @@ export default function AgentConsole() {
                 <label htmlFor="sms" className="sr-only">
                   Message
                 </label>
-                <input id="sms" value={input} onChange={(e) => setInput(e.target.value)} placeholder="iMessage" className="flex-1 rounded-full border border-line px-3 py-2 text-sm outline-none focus:border-[#0a84ff]" />
+                <input id="sms" value={input} onChange={(e) => setInput(e.target.value)} placeholder="iMessage" className="flex-1 rounded-md border border-line px-3 py-2 text-sm outline-none focus:border-[#0a84ff]" />
                 <button type="submit" disabled={busy || !input.trim()} aria-label="Send" className="grid h-8 w-8 place-items-center rounded-full bg-[#0a84ff] text-white disabled:opacity-40">
                   <ArrowUp size={16} />
                 </button>
@@ -247,6 +248,9 @@ export default function AgentConsole() {
           )}
           {(run || busy) && (
             <div className="mt-4">
+              <div className="mb-3 rounded-xl border border-line bg-sunken px-3 pt-3 pb-1">
+                <AgentActivityIndicator events={run?.events ?? []} shown={busy ? 0 : shown} busy={busy} />
+              </div>
               <AgentStatusBoard events={run?.events ?? []} shown={busy ? 0 : shown} busy={busy} compact />
             </div>
           )}
@@ -254,7 +258,7 @@ export default function AgentConsole() {
           {run && run.todos.length > 0 && (
             <ol className="mt-4 flex flex-wrap gap-1.5">
               {run.todos.map((t) => (
-                <li key={t.content} className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium", t.status === "completed" ? "bg-brand-soft text-brand-2" : "bg-paper text-ink-2")}>
+                <li key={t.content} className={cn("inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium", t.status === "completed" ? "bg-brand-soft text-brand-2" : "bg-paper text-ink-2")}>
                   {t.status === "completed" ? <CheckCircle2 size={12} /> : <CircleDashed size={12} />} {t.content}
                 </li>
               ))}
@@ -266,7 +270,7 @@ export default function AgentConsole() {
               const Icon = meta.icon;
               return (
                 <motion.li key={e.seq} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2 }} className={cn("flex gap-3 rounded-xl border p-3", e.agent === "supervisor" ? "border-line bg-sunken" : "ml-4 border-line bg-card")}>
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white" style={{ background: meta.color }}>
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-sunken text-ink">
                     <Icon size={16} />
                   </span>
                   <div className="min-w-0">
@@ -295,9 +299,9 @@ export default function AgentConsole() {
           <Card className="p-5">
             <h2 className="font-semibold">Verified result</h2>
             {!v ? (
-              <p className="mt-2 text-sm text-ink-3">Nothing verified yet.</p>
+              <p className="mt-2 text-sm text-ink-3">{replaying ? "Waiting for the Verification Agent…" : "Nothing verified yet."}</p>
             ) : (
-              <div className="mt-3 space-y-3 text-sm">
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="mt-3 space-y-3 text-sm">
                 <div className={cn("rounded-xl p-3", v.status === "verified" ? "bg-brand-soft" : "bg-warn-soft")}>
                   <div className="font-semibold">{v.status === "verified" ? "Everything verified" : v.status === "partially-verified" ? "Partially verified" : "Blocked"}</div>
                   {b && (
@@ -327,7 +331,7 @@ export default function AgentConsole() {
                     </li>
                   ))}
                 </ul>
-              </div>
+              </motion.div>
             )}
           </Card>
 

@@ -3,7 +3,10 @@
 // stored server-side. Every number comes from /api/banking (deterministic calculations).
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Database, RefreshCw, Repeat, Search } from "lucide-react";
-import { Badge, Button, Card, PageHeader, Stat, cn } from "@/components/ui";
+import { Badge, Button, Card, PageHeader, Skeleton, Stat, cn } from "@/components/ui";
+import { AnimatePresence, motion } from "framer-motion";
+import { AnimatedNumber } from "@/components/motion";
+import { DURATION, EASE } from "@/lib/motion";
 import { AdvisorTabs } from "@/components/AppShell";
 import { IS_STATIC } from "@/lib/runtime";
 import { usd } from "@/lib/format";
@@ -114,7 +117,12 @@ export default function BudgetPage() {
         </div>
       )}
       {error && <div className="mb-4 rounded-2xl border border-debt/30 bg-debt-soft p-3 text-sm text-debt" role="alert">{error}</div>}
-      {!data && !error && <Card className="text-sm text-ink-3">Loading your demo banking data…</Card>}
+      {!data && !error && (
+        <div className="space-y-4" aria-busy="true" aria-label="Loading your demo banking data">
+          <Skeleton className="h-28 w-full rounded-2xl" />
+          <div className="grid gap-4 lg:grid-cols-2"><Skeleton className="h-56 rounded-2xl" /><Skeleton className="h-56 rounded-2xl" /></div>
+        </div>
+      )}
 
       {data && (
         <>
@@ -132,9 +140,9 @@ export default function BudgetPage() {
 
           {s && (
             <Card className="mb-4 grid grid-cols-2 gap-5 sm:grid-cols-4">
-              <Stat label="Income" value={usd(s.income)} sub="deposits, not transfers" />
-              <Stat label="Spending" value={usd(s.netSpending)} sub={s.refunds ? `after ${usd(s.refunds)} refunds` : "net of refunds"} />
-              <Stat label="Net cash flow" value={usd(s.netCashFlow)} tone={s.netCashFlow >= 0 ? "good" : "bad"} />
+              <Stat label="Income" value={<AnimatedNumber value={s.income} format={(n) => usd(n)} />} sub="deposits, not transfers" />
+              <Stat label="Spending" value={<AnimatedNumber value={s.netSpending} format={(n) => usd(n)} />} sub={s.refunds ? `after ${usd(s.refunds)} refunds` : "net of refunds"} />
+              <Stat label="Net cash flow" value={<AnimatedNumber value={s.netCashFlow} format={(n) => usd(n)} />} tone={s.netCashFlow >= 0 ? "good" : "bad"} />
               <Stat label="Own transfers" value={usd(s.transfersExcluded)} sub="not counted" />
             </Card>
           )}
@@ -147,7 +155,7 @@ export default function BudgetPage() {
                 {data.byCategory.map((c) => (
                   <li key={c.category}>
                     <div className="flex justify-between text-sm"><span className="text-ink-2">{c.category}</span><span className="num font-semibold text-ink">{usd(c.amount)}</span></div>
-                    <div className="mt-1 h-2 rounded-full bg-ink/5"><div className="h-2 rounded-full bg-brand" style={{ width: `${(c.amount / maxCat) * 100}%` }} /></div>
+                    <div className="mt-1 h-2 rounded-full bg-ink/5"><motion.div className="h-2 origin-left rounded-full bg-brand" initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ duration: DURATION.sequence, ease: EASE.out }} style={{ width: `${(c.amount / maxCat) * 100}%` }} /></div>
                   </li>
                 ))}
               </ul>
@@ -162,7 +170,7 @@ export default function BudgetPage() {
                       <span className="text-ink-2">{b.category}</span>
                       <span className="num text-ink">{usd(b.spent)} of {usd(b.limit)} {b.status !== "ok" && <Badge tone={b.status === "over" ? "bad" : "warn"}>{b.status === "over" ? "Over" : "Near limit"}</Badge>}</span>
                     </div>
-                    <div className="mt-1 h-2 rounded-full bg-ink/5"><div className={cn("h-2 rounded-full", b.status === "over" ? "bg-debt" : b.status === "near" ? "bg-warn" : "bg-brand")} style={{ width: `${Math.min(100, b.pct)}%` }} /></div>
+                    <div className="mt-1 h-2 rounded-full bg-ink/5"><motion.div className={cn("h-2 origin-left rounded-full", b.status === "over" ? "bg-debt" : b.status === "near" ? "bg-warn" : "bg-brand")} initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ duration: DURATION.sequence, ease: EASE.out }} style={{ width: `${Math.min(100, b.pct)}%` }} /></div>
                   </li>
                 ))}
               </ul>
@@ -219,8 +227,9 @@ export default function BudgetPage() {
                   <tr><th className="py-2 pr-3">Date</th><th className="pr-3">Description</th><th className="pr-3">Account</th><th className="pr-3">Type</th><th className="pr-3">Category</th><th className="text-right">Amount</th></tr>
                 </thead>
                 <tbody className="divide-y divide-line">
+                  <AnimatePresence initial={false}>
                   {data.transactions.map((t) => (
-                    <tr key={t.id} className="align-top">
+                    <motion.tr key={t.id} layout="position" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: DURATION.card }} className="align-top">
                       <td className="num py-2 pr-3 whitespace-nowrap">{t.date ?? <span className="text-warn">No date</span>}</td>
                       <td className="pr-3">
                         {t.merchant ?? t.description ?? "—"}
@@ -242,8 +251,9 @@ export default function BudgetPage() {
                         )}
                       </td>
                       <td className={cn("num text-right whitespace-nowrap", t.direction === "inflow" ? "text-brand" : "text-ink")}>{t.direction === "inflow" ? "+" : "−"}{usd(t.amount)}</td>
-                    </tr>
+                    </motion.tr>
                   ))}
+                  </AnimatePresence>
                 </tbody>
               </table>
             </div>

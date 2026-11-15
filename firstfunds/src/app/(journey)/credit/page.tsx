@@ -22,7 +22,8 @@ import { duration, durationLong, pct, usd } from "@/lib/format";
 import { Badge, Button, Card, PageHeader, SliderField, Stat, cn } from "@/components/ui";
 import { AdvisorTabs } from "@/components/AppShell";
 
-const S = { min: "#eb6834", plan: "#2a78d6", fast: "#1baf7a" };
+// Monochrome series: minimum (darkest, solid), your plan (ash, solid), faster (light, dashed).
+const S = { min: "var(--color-s3)", plan: "var(--color-s2)", fast: "var(--color-s1)" };
 
 export default function CreditPage() {
   const { card, setCard, paycheck, transactions, transactionsSource, setTransactions, setTutorOpen } = useApp();
@@ -276,12 +277,12 @@ export default function CreditPage() {
             <div className="mt-4 h-72" role="img" aria-label={`Line chart: minimum payments take ${durationLong(min.months)}, your plan takes ${durationLong(plan.months)}.`}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={lineData} margin={{ top: 10, right: 12, bottom: 0, left: 0 }}>
-                  <CartesianGrid stroke="#e3e8e4" vertical={false} />
+                  <CartesianGrid stroke="var(--color-line)" vertical={false} />
                   <XAxis
                     dataKey="month"
                     tickLine={false}
-                    axisLine={{ stroke: "#e3e8e4" }}
-                    tick={{ fontSize: 12, fill: "#6b7a87" }}
+                    axisLine={{ stroke: "var(--color-line)" }}
+                    tick={{ fontSize: 12, fill: "var(--color-ink-3)" }}
                     tickFormatter={(m) => (horizon > 36 ? (m % 12 === 0 ? `${m / 12}y` : "") : `${m}`)}
                     interval={horizon > 36 ? 0 : "preserveStartEnd"}
                     minTickGap={4}
@@ -289,18 +290,18 @@ export default function CreditPage() {
                   <YAxis
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 12, fill: "#6b7a87" }}
+                    tick={{ fontSize: 12, fill: "var(--color-ink-3)" }}
                     tickFormatter={(v) => usd(v)}
                     width={64}
                   />
                   <Tooltip
-                    cursor={{ stroke: "#6b7a87", strokeDasharray: "3 3" }}
-                    contentStyle={{ borderRadius: 12, border: "1px solid #e3e8e4", fontSize: 13 }}
+                    cursor={{ stroke: "var(--color-ink-3)", strokeDasharray: "3 3" }}
+                    contentStyle={{ borderRadius: 12, border: "1px solid var(--color-line)", background: "var(--color-card)", fontSize: 13 }}
                     labelFormatter={(m) => `Month ${m}`}
                     formatter={(v, n) => [usd(Number(v), true), n === "minimum" ? "Minimum only" : n === "plan" ? "Your plan" : "Faster plan"]}
                   />
                   {card.creditLimit > 0 && card.creditLimit < card.balance * 1.6 && (
-                    <ReferenceLine y={card.creditLimit} stroke="#b7790d" strokeDasharray="4 4" label={{ value: "Credit limit", fontSize: 11, fill: "#b7790d", position: "insideTopRight" }} />
+                    <ReferenceLine y={card.creditLimit} stroke="var(--color-warn)" strokeDasharray="4 4" label={{ value: "Credit limit", fontSize: 11, fill: "#b7790d", position: "insideTopRight" }} />
                   )}
                   <Line type="linear" dataKey="minimum" stroke={S.min} strokeWidth={2.5} dot={false} connectNulls={false} animationDuration={450} />
                   <Line type="linear" dataKey="plan" stroke={S.plan} strokeWidth={2.5} dot={false} animationDuration={450} />
@@ -327,16 +328,16 @@ export default function CreditPage() {
                     <YAxis type="category" dataKey="name" width={84} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#3b4a57" }} />
                     <Tooltip
                       cursor={{ fill: "rgba(14,26,36,0.04)" }}
-                      contentStyle={{ borderRadius: 12, border: "1px solid #e3e8e4", fontSize: 13 }}
+                      contentStyle={{ borderRadius: 12, border: "1px solid var(--color-line)", background: "var(--color-card)", fontSize: 13 }}
                       formatter={(v, n) => [usd(Number(v), true), n === "principal" ? "Principal" : "Interest"]}
                     />
-                    <Bar dataKey="principal" stackId="a" fill="#c9d3d9" stroke="#fff" strokeWidth={2} animationDuration={450} />
-                    <Bar dataKey="interest" stackId="a" fill={S.min} stroke="#fff" strokeWidth={2} radius={[0, 4, 4, 0]} animationDuration={450} />
+                    <Bar dataKey="principal" stackId="a" fill="var(--color-smoke)" stroke="var(--color-card)" strokeWidth={2} animationDuration={450} />
+                    <Bar dataKey="interest" stackId="a" fill={S.min} stroke="var(--color-card)" strokeWidth={2} radius={[0, 4, 4, 0]} animationDuration={450} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
               <div className="flex gap-4 text-xs text-ink-2">
-                <LegendDot color="#c9d3d9" label="Principal" />
+                <LegendDot color="var(--color-smoke)" label="Principal" />
                 <LegendDot color={S.min} label="Interest" />
               </div>
             </Card>
@@ -434,7 +435,7 @@ function LegendDot({ color, label, dashed }: { color: string; label: string; das
 
 function UtilizationMeter({ value }: { value: number }) {
   const v = Math.min(100, Math.max(0, value));
-  const color = value <= 10 ? "#17795a" : value <= 30 ? "#2f5fd0" : value <= 75 ? "#b7790d" : "#d0453a";
+  const color = value <= 10 ? "var(--color-ink)" : value <= 30 ? "var(--color-ink-2)" : value <= 75 ? "var(--color-warn)" : "var(--color-debt)";
   return (
     <div className="mt-5">
       <div className="num text-4xl font-semibold">{pct(value)}</div>

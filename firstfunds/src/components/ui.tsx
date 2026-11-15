@@ -1,5 +1,7 @@
 "use client";
-import { Info } from "lucide-react";
+import { Check, Info, Loader2 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { DURATION, EASE, pressDown } from "@/lib/motion";
 import { useId, useState, type ReactNode } from "react";
 
 export function cn(...c: (string | false | null | undefined)[]) {
@@ -8,7 +10,7 @@ export function cn(...c: (string | false | null | undefined)[]) {
 
 export function Card({ className, children, interactive }: { className?: string; children: ReactNode; interactive?: boolean }) {
   return (
-    <div className={cn("surface rounded-2xl border border-line p-5 sm:p-6", interactive && "lift hover:border-brand/40", className)}>
+    <div className={cn("surface rounded-2xl border border-line p-5 sm:p-6", interactive && "lift hover:-translate-y-0.5 hover:border-ink-3", className)}>
       {children}
     </div>
   );
@@ -22,15 +24,19 @@ export function Skeleton({ className }: { className?: string }) {
 /** Friendly empty state with exactly one primary action. */
 export function EmptyState({ icon, title, body, action }: { icon?: ReactNode; title: string; body: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center rounded-2xl border border-dashed border-line bg-sunken/60 px-6 py-10 text-center">
-      {icon && <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-brand-soft text-brand">{icon}</div>}
+    <div className="flex flex-col items-start rounded-xl bg-sunken px-6 py-8 text-left">
+      {icon && <div className="mb-3 grid h-11 w-11 place-items-center rounded-xl bg-card text-ink">{icon}</div>}
       <div className="font-semibold text-ink">{title}</div>
-      <p className="mt-1 max-w-sm text-sm text-ink-2">{body}</p>
+      <p className="mt-1 max-w-md text-sm text-ink-3">{body}</p>
       {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }
 
+/**
+ * MotionButton: lifts slightly on hover, presses down on tap, and can show a loading
+ * spinner or a brief success check. Loading/success reflect real async state from the caller.
+ */
 export function Button({
   children,
   onClick,
@@ -38,6 +44,8 @@ export function Button({
   className,
   type = "button",
   disabled,
+  loading,
+  success,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -45,27 +53,48 @@ export function Button({
   className?: string;
   type?: "button" | "submit";
   disabled?: boolean;
+  loading?: boolean;
+  success?: boolean;
 }) {
   const styles = {
-    primary: "bg-ink text-paper shadow-sm hover:bg-ink-2",
-    secondary: "bg-card text-ink border border-line shadow-sm hover:border-ink-3",
-    ghost: "text-ink-2 hover:bg-ink/5",
+    primary: "bg-accent text-on-accent hover:bg-[#d6e41c]",
+    secondary: "bg-transparent text-ink border border-ink hover:bg-sunken",
+    ghost: "text-ink hover:bg-sunken",
   }[variant];
+  const off = disabled || loading;
   return (
-    <button
+    <motion.button
       type={type}
       onClick={onClick}
-      disabled={disabled}
+      disabled={off}
+      aria-busy={loading || undefined}
+      whileHover={off ? undefined : { y: -1, transition: { duration: DURATION.hover, ease: EASE.out } }}
+      whileTap={off ? undefined : pressDown}
       className={cn(
-        "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-[background-color,border-color,transform] duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
+        "relative inline-flex min-h-11 items-center justify-center gap-2 overflow-hidden rounded-md px-5 py-2.5 text-sm transition-colors duration-200 ease-out disabled:cursor-not-allowed disabled:opacity-60",
         styles,
         className,
       )}
     >
-      {children}
-    </button>
+      <AnimatePresence mode="popLayout" initial={false}>
+        {loading ? (
+          <motion.span key="l" className="inline-flex items-center gap-2" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
+            <Loader2 size={15} className="animate-spin" /> Working…
+          </motion.span>
+        ) : success ? (
+          <motion.span key="s" className="inline-flex items-center gap-2" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+            <Check size={15} /> Done
+          </motion.span>
+        ) : (
+          <motion.span key="c" className="inline-flex items-center gap-2" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
+            {children}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </motion.button>
   );
 }
+export const MotionButton = Button;
 
 export function InfoTip({ children, label = "More info" }: { children: ReactNode; label?: string }) {
   const [open, setOpen] = useState(false);
@@ -88,7 +117,7 @@ export function InfoTip({ children, label = "More info" }: { children: ReactNode
         <span
           id={id}
           role="tooltip"
-          className="absolute bottom-6 left-1/2 z-30 w-64 -translate-x-1/2 rounded-lg bg-ink px-3 py-2 text-xs leading-relaxed font-normal text-paper shadow-lg"
+          className="absolute bottom-6 left-1/2 z-30 w-64 -translate-x-1/2 rounded-lg bg-obsidian px-3 py-2 text-xs leading-relaxed font-normal text-paper shadow-lg"
         >
           {children}
         </span>
@@ -110,14 +139,14 @@ export function Stat({
   tone?: "default" | "good" | "bad" | "warn";
   tip?: ReactNode;
 }) {
-  const color = { default: "text-ink", good: "text-brand", bad: "text-debt", warn: "text-warn" }[tone];
+  const color = { default: "text-ink", good: "text-ink", bad: "text-debt", warn: "text-warn" }[tone];
   return (
     <div>
-      <div className="flex items-center text-xs font-medium tracking-wide text-ink-3 uppercase">
+      <div className="flex items-center text-[11px] tracking-[0.05em] text-ink-3 uppercase">
         {label}
         {tip && <InfoTip label={`About ${label}`}>{tip}</InfoTip>}
       </div>
-      <div className={cn("num mt-1 text-2xl font-semibold sm:text-3xl", color)}>{value}</div>
+      <div className={cn("num mt-1.5 text-[28px] leading-[1.14]", color)}>{value}</div>
       {sub && <div className="mt-0.5 text-sm text-ink-3">{sub}</div>}
     </div>
   );
@@ -125,13 +154,13 @@ export function Stat({
 
 export function Badge({ children, tone = "default" }: { children: ReactNode; tone?: "default" | "good" | "bad" | "warn" | "info" }) {
   const s = {
-    default: "bg-ink/5 text-ink-2",
-    good: "bg-brand-soft text-brand-2",
+    default: "bg-sunken text-ink-2",
+    good: "bg-accent text-on-accent",
     bad: "bg-debt-soft text-debt",
     warn: "bg-warn-soft text-warn",
-    info: "bg-info-soft text-info",
+    info: "bg-sunken text-ink",
   }[tone];
-  return <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold", s)}>{children}</span>;
+  return <span className={cn("inline-flex items-center gap-1 rounded-md px-2.5 py-0.5 text-xs font-semibold", s)}>{children}</span>;
 }
 
 export function SliderField({
@@ -201,8 +230,8 @@ export function PageHeader({ step, title, subtitle, right }: { step?: string; ti
   return (
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        {step && <div className="text-xs font-semibold tracking-widest text-brand uppercase">{step}</div>}
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{title}</h1>
+        {step && <div className="text-[11px] tracking-[0.05em] text-ink-3 uppercase">{step}</div>}
+        <h1 className="mt-2 text-[28px] leading-[1.14] text-ink sm:text-[40px] sm:leading-[1.05]">{title}</h1>
         {subtitle && <p className="mt-1.5 max-w-2xl text-ink-2">{subtitle}</p>}
       </div>
       {right}

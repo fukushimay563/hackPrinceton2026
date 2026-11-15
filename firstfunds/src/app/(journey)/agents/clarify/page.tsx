@@ -94,7 +94,7 @@ export default function ClarifyPage() {
                 <input type="number" inputMode="decimal" min={0} step="0.01" required value={value} onChange={(e) => setValue(e.target.value)} className="num w-full bg-transparent px-2 py-3.5 text-lg font-semibold outline-none" placeholder="0.00" />
               </div>
             </label>
-            <button disabled={busy || value === ""} className="mt-4 flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl bg-ink font-semibold text-paper disabled:opacity-40">
+            <button disabled={busy || value === ""} className="mt-4 flex w-full min-h-14 items-center justify-center gap-2 rounded-md bg-accent font-semibold text-on-accent disabled:opacity-40">
               {busy ? <Loader2 size={18} className="animate-spin" /> : null} Submit and re-check
             </button>
             <p className="mt-3 flex items-start gap-1.5 text-xs text-ink-3">
@@ -163,7 +163,7 @@ export default function ClarifyPage() {
                   ? "You declined, so nothing changed."
                   : "Nothing was saved."}
             </p>
-            <Link href="/agents" className="mt-5 inline-flex min-h-12 items-center rounded-xl bg-ink px-5 font-semibold text-paper">
+            <Link href="/agents" className="mt-5 inline-flex min-h-12 items-center rounded-md bg-accent px-5 font-semibold text-on-accent">
               Back to the Agent Console
             </Link>
           </div>
@@ -179,7 +179,7 @@ function Decision({ busy, onDecide }: { busy: boolean; onDecide: (d: "approve" |
       <button disabled={busy} onClick={() => onDecide("reject")} className="min-h-12 flex-1 rounded-xl border-2 border-line bg-card font-semibold disabled:opacity-40">
         Don&apos;t save
       </button>
-      <button disabled={busy} onClick={() => onDecide("approve")} className="min-h-12 flex-1 rounded-xl bg-brand font-semibold text-on-brand disabled:opacity-40">
+      <button disabled={busy} onClick={() => onDecide("approve")} className="min-h-12 flex-1 rounded-md bg-accent font-semibold text-on-accent disabled:opacity-40">
         Approve and save
       </button>
     </div>

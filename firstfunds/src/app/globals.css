@@ -4,66 +4,84 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* FirstFunds palette: deep navy ink, warm off-white paper, muted teal brand. */
-  --color-ink: #0f1d2e;
-  --color-ink-2: #3a4859;
-  --color-ink-3: #5f6c7d;
-  --color-line: #e5e0d6;
-  --color-paper: #f7f4ee;
-  --color-card: #ffffff;
-  --color-sunken: #f1ede5;
+  /* Editorial single-weight system: hierarchy comes from size and tracking, never weight. */
+  --font-weight-medium: 400;
+  --font-weight-semibold: 400;
+  --font-weight-bold: 400;
+  --tracking-tight: 0em;
+  --tracking-tighter: 0em;
 
-  --color-brand: #1d6f66;
-  --color-brand-2: #135148;
-  --color-brand-soft: #e0eeeb;
-  --color-mint: #9fd6ca;
+  /* Radii: 6 buttons/tags · 10 inputs · 12 wash cards · 16 content cards */
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+
+  /* Near-monochrome palette with one action accent */
+  --color-ink: #0c0a08;        /* text */
+  --color-ink-2: #3f3d3b;      /* secondary text */
+  --color-ink-3: #6d6c6b;      /* ash: captions, muted labels */
+  --color-line: #e5e7eb;       /* hairline */
+  --color-smoke: #d3d3d3;
+  --color-paper: #f4f2f0;      /* bone canvas (also light text on inverted panels) */
+  --color-card: #ffffff;
+  --color-sunken: #f4f2f0;     /* wash */
+  --color-obsidian: #1a1919;   /* inverted panels */
+
+  --color-accent: #e4f222;     /* highlighter: action fills, active states only */
+  --color-on-accent: #0c0a08;
+
+  /* Legacy "brand" tokens re-pointed to the monochrome system */
+  --color-brand: #0c0a08;
+  --color-brand-2: #0c0a08;
+  --color-brand-soft: #f4f2f0;
+  --color-mint: #e4f222;
   --color-on-brand: #ffffff;
 
-  --color-debt: #b93d2c;
-  --color-debt-soft: #fae8e4;
-  --color-warn: #8f6206;
-  --color-warn-soft: #f7efdb;
-  --color-info: #2c5aae;
-  --color-info-soft: #e6edf9;
+  /* Status (kept restrained; errors and warnings must stay recognisable) */
+  --color-debt: #b42318;
+  --color-debt-soft: #fbeae8;
+  --color-warn: #7a5a00;
+  --color-warn-soft: #f6f0d8;
+  --color-info: #0c0a08;
+  --color-info-soft: #f4f2f0;
 
-  /* Chart series — validated (dataviz validator, light surface): orange, blue, aqua */
-  --color-s1: #eb6834;
-  --color-s2: #2a78d6;
-  --color-s3: #1baf7a;
+  /* Chart series: monochrome steps, all >= 3:1 on white, separated by lightness */
+  --color-s1: #8a8887;
+  --color-s2: #6d6c6b;
+  --color-s3: #1a1919;
 
-  --shadow-card: 0 1px 2px rgb(15 29 46 / 0.04), 0 4px 16px -6px rgb(15 29 46 / 0.08);
-  --shadow-lift: 0 2px 4px rgb(15 29 46 / 0.05), 0 14px 32px -12px rgb(15 29 46 / 0.18);
+  --shadow-card: none;
+  --shadow-lift: none;
 }
 
-/* Dark mode: same tokens, re-pointed. Chosen explicitly (data-theme) or from the OS. */
+/* Dark mode: the same system inverted (obsidian canvas, bone text, same highlighter). */
 :root[data-theme="dark"] {
-  --color-ink: #e8edf3;
-  --color-ink-2: #b9c4d1;
-  --color-ink-3: #93a0b2;
-  --color-line: #233349;
-  --color-paper: #0b1422;
-  --color-card: #111d2e;
-  --color-sunken: #0e1827;
-  --color-brand: #5fbfb1;
-  --color-brand-2: #8dd5ca;
-  --color-brand-soft: #14302e;
-  --color-mint: #2d6b62;
-  --color-on-brand: #062420;
-  --color-debt: #f08a78;
-  --color-debt-soft: #3a1c19;
-  --color-warn: #e9b65a;
-  --color-warn-soft: #33270f;
-  --color-info: #8fb3f5;
-  --color-info-soft: #172744;
-  /* Chart series re-validated for the dark surface (#111d2e) */
-  --color-s1: #e2622f;
-  --color-s2: #3a86e0;
-  --color-s3: #1baf7a;
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 18px -8px rgb(0 0 0 / 0.5);
-  --shadow-lift: 0 2px 6px rgb(0 0 0 / 0.35), 0 16px 36px -12px rgb(0 0 0 / 0.6);
+  --color-ink: #f4f2f0;
+  --color-ink-2: #cfccc9;
+  --color-ink-3: #9a9897;
+  --color-line: #2c2b2a;
+  --color-smoke: #3a3938;
+  --color-paper: #0f0e0d;
+  --color-card: #1a1919;
+  --color-sunken: #141312;
+  --color-obsidian: #f4f2f0;
+  --color-brand: #f4f2f0;
+  --color-brand-2: #f4f2f0;
+  --color-brand-soft: #242322;
+  --color-on-brand: #0f0e0d;
+  --color-debt: #f2877a;
+  --color-debt-soft: #3a1714;
+  --color-warn: #e6c45a;
+  --color-warn-soft: #2e260e;
+  --color-info: #f4f2f0;
+  --color-info-soft: #242322;
+  --color-s1: #8a8887;
+  --color-s2: #b3b1af;
+  --color-s3: #f4f2f0;
   color-scheme: dark;
 }
 
@@ -74,35 +92,38 @@ html {
 
 body {
   font-family: var(--font-sans);
-  font-feature-settings: "tnum" 1, "cv11" 1;
+  font-weight: 400;
+  font-feature-settings: "ss01" 1, "tnum" 1, "cv11" 1;
 }
+
+h1 { line-height: 1.02; }
 
 @layer components {
-/* Layered surfaces (in a layer so utilities like bg-ink can override) */
+/* Flat surfaces: hairline borders do the elevation work (no drop shadows) */
 .surface {
   background: var(--color-card);
-  box-shadow: var(--shadow-card);
 }
 .glass {
-  background: color-mix(in srgb, var(--color-paper) 78%, transparent);
-  backdrop-filter: saturate(1.4) blur(14px);
-  -webkit-backdrop-filter: saturate(1.4) blur(14px);
+  background: color-mix(in srgb, var(--color-card) 88%, transparent);
+  box-shadow: rgba(255, 255, 255, 0.6) 0 0 2px 0 inset;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
+/* Hover = colour change only (border/background), 300ms ease-out */
 .lift {
-  transition: transform 180ms cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 180ms ease, border-color 180ms ease;
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), background-color 200ms ease-out, border-color 200ms ease-out, color 200ms ease-out;
 }
+.lift:hover { transform: translateY(-2px); }
+.lift:active { transform: translateY(0) scale(0.985); transition-duration: 120ms; }
 .lift:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lift);
+  border-color: var(--color-ink-3);
 }
-
 }
 
 /* Visible, consistent keyboard focus */
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--color-brand);
+  outline: 2px solid var(--color-ink);
   outline-offset: 2px;
-  border-radius: 10px;
 }
 
 @layer components {
@@ -147,7 +168,7 @@ input[type="range"].ff-range::-webkit-slider-thumb {
   border-radius: 999px;
   background: var(--color-card);
   border: 2px solid var(--color-brand);
-  box-shadow: 0 1px 4px rgb(14 26 36 / 0.2);
+  box-shadow: none;
   cursor: grab;
   transition: transform 0.12s ease;
 }
@@ -169,6 +190,7 @@ input[type="range"].ff-range:focus-visible::-webkit-slider-thumb {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .lift:hover, .lift:active { transform: none; }
   *,
   *::before,
   *::after {

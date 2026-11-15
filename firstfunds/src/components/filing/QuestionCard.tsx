@@ -103,7 +103,7 @@ export function QuestionCard({
             <button
               disabled={!multi.length}
               onClick={() => onAnswer(multi.includes(NOT_SURE) ? NOT_SURE : multi)}
-              className="mt-2 w-full min-h-14 rounded-2xl bg-ink text-base font-semibold text-paper disabled:opacity-40"
+              className="mt-2 w-full min-h-14 rounded-md bg-accent text-base font-semibold text-on-accent disabled:opacity-40"
             >
               Continue
             </button>
@@ -130,7 +130,7 @@ export function QuestionCard({
             <button
               disabled={amount === "" || Number(amount) < 0}
               onClick={() => onAnswer(Math.round(Number(amount) * 100) / 100)}
-              className="w-full min-h-14 rounded-2xl bg-ink text-base font-semibold text-paper disabled:opacity-40"
+              className="w-full min-h-14 rounded-md bg-accent text-base font-semibold text-on-accent disabled:opacity-40"
             >
               Use this amount
             </button>

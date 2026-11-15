@@ -26,13 +26,13 @@ import { Badge, Button, Card, InfoTip, PageHeader, cn } from "@/components/ui";
 const STEPS = ["W-2", "Filing status", "Income", "Deduction", "Tax", "Result"];
 // Sequential blue ramp for bracket rates (magnitude = one hue, light → dark).
 const RATE_COLORS: Record<string, string> = {
-  "0.1": "#9ec5f4",
-  "0.12": "#6da7ec",
-  "0.22": "#3987e5",
-  "0.24": "#256abf",
-  "0.32": "#184f95",
-  "0.35": "#104281",
-  "0.37": "#0d366b",
+  "0.1": "#a8a6a4",
+  "0.12": "#8a8887",
+  "0.22": "#6d6c6b",
+  "0.24": "#555352",
+  "0.32": "#3f3d3b",
+  "0.35": "#2c2b2a",
+  "0.37": "#1a1919",
 };
 
 function NumberInput({ label, value, onChange, hint }: { label: ReactNode; value: number; onChange: (n: number) => void; hint?: string }) {
@@ -147,7 +147,7 @@ export default function TaxesPage() {
               aria-current={i === step ? "step" : undefined}
               className={cn(
                 "w-full min-w-24 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition-colors",
-                i === step ? "border-ink bg-ink text-paper" : i < step ? "border-brand/30 bg-brand-soft text-brand-2" : "border-line bg-card text-ink-3",
+                i === step ? "border-ink bg-obsidian text-paper" : i < step ? "border-brand/30 bg-brand-soft text-brand-2" : "border-line bg-card text-ink-3",
               )}
             >
               <span className="flex items-center gap-1">
@@ -327,7 +327,7 @@ export default function TaxesPage() {
                     <span className="num w-12 font-semibold">{Math.round(s.rate * 100)}%</span>
                     <div className="relative h-8 flex-1 overflow-hidden rounded-lg bg-paper">
                       <div
-                        className="flex h-full items-center rounded-lg px-2 text-xs font-semibold text-white transition-all duration-500"
+                        className={`flex h-full items-center rounded-lg px-2 text-xs transition-all duration-500 ${s.rate <= 0.12 ? "text-[#0c0a08]" : "text-white"}`}
                         style={{
                           width: `${Math.max(6, ((s.to - s.from) / (r.taxableIncome || 1)) * 100)}%`,
                           background: RATE_COLORS[String(s.rate)],
@@ -375,12 +375,12 @@ export default function TaxesPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={[{ n: "Tax owed", v: r.tax }, { n: "Withheld", v: r.withholding }]} layout="vertical" margin={{ right: 70 }}>
                       <XAxis type="number" hide domain={[0, "dataMax"]} />
-                      <YAxis type="category" dataKey="n" width={80} tickLine={false} axisLine={false} tick={{ fontSize: 13, fill: "#3b4a57" }} />
+                      <YAxis type="category" dataKey="n" width={80} tickLine={false} axisLine={false} tick={{ fontSize: 13, fill: "var(--color-ink-2)" }} />
                       <Tooltip formatter={(v) => usd(Number(v))} cursor={{ fill: "rgba(14,26,36,0.04)" }} contentStyle={{ borderRadius: 12, fontSize: 13 }} />
                       <Bar dataKey="v" radius={[0, 4, 4, 0]} barSize={26} animationDuration={500}>
-                        <Cell fill="#eb6834" />
-                        <Cell fill="#2a78d6" />
-                        <LabelList dataKey="v" position="right" formatter={(v) => usd(Number(v))} style={{ fontSize: 13, fontWeight: 600, fill: "#0e1a24" }} />
+                        <Cell fill="var(--color-s3)" />
+                        <Cell fill="var(--color-s2)" />
+                        <LabelList dataKey="v" position="right" formatter={(v) => usd(Number(v))} style={{ fontSize: 13, fontWeight: 600, fill: "var(--color-ink)" }} />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -495,7 +495,7 @@ export default function TaxesPage() {
 
 function Mini({ label, value, tone, strong }: { label: string; value: string; tone?: "good"; strong?: boolean }) {
   return (
-    <div className={cn("rounded-xl p-4", strong ? "bg-ink text-paper" : "bg-paper")}>
+    <div className={cn("rounded-xl p-4", strong ? "bg-obsidian text-paper" : "bg-paper")}>
       <div className={cn("text-xs", strong ? "text-paper/70" : "text-ink-3")}>{label}</div>
       <div className={cn("num mt-1 text-xl font-semibold", tone === "good" && "text-brand")}>{value}</div>
     </div>
@@ -521,7 +521,7 @@ function W2Preview({ w2 }: { w2: NonNullable<ReturnType<typeof useApp.getState>[
     </div>
   );
   return (
-    <div className="rounded-xl border border-ink/20 bg-[#fffdf6]">
+    <div className="rounded-xl border border-ink/20 bg-card">
       <div className="flex items-center justify-between border-b border-ink/20 px-3 py-2 text-xs">
         <b>Form W-2 · Wage and Tax Statement · {TAX_YEAR}</b>
         <span className="text-ink-3">{w2.employer}</span>

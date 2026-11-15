@@ -1,4 +1,6 @@
 "use client";
+import { AnimatePresence, motion } from "framer-motion";
+import { DURATION, EASE } from "@/lib/motion";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Cloud, Loader2, RotateCcw, ShieldCheck, Sparkles } from "lucide-react";
@@ -10,7 +12,6 @@ import { useSession } from "@/lib/supabase/useSession";
 import type { FilingEvent } from "@/lib/minimizer/types";
 import { useApp } from "@/lib/store";
 import { askTutorQuestion } from "@/lib/tutor/ask";
-import { cn } from "@/components/ui";
 import { QuestionCard } from "./QuestionCard";
 import { ConfirmDoc, DocumentsStep } from "./DocumentsStep";
 import { ApprovedStep, EstimateStep, Notices, UnsupportedStep, VerifyStep } from "./ReviewSteps";
@@ -116,7 +117,7 @@ export function FilingFlow() {
     return (
       <Shell>
         <div className="py-4">
-          <div className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-2">
+          <div className="inline-flex items-center gap-2 rounded-md bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-2">
             <Sparkles size={14} /> 2025 federal return
           </div>
           <h1 className="mt-4 text-3xl leading-tight font-semibold tracking-tight sm:text-4xl">Let&apos;s get your taxes done, with as few questions as possible.</h1>
@@ -131,7 +132,7 @@ export function FilingFlow() {
               <Num n={3} /> We only ask what your documents can&apos;t tell us
             </li>
           </ul>
-          <button onClick={() => setStarted(true)} className="mt-8 w-full min-h-14 rounded-2xl bg-ink text-lg font-semibold text-paper hover:bg-ink-2">
+          <button onClick={() => setStarted(true)} className="mt-8 w-full min-h-14 rounded-md bg-accent text-lg font-semibold text-on-accent hover:bg-[#d6e41c]">
             Start
           </button>
           <p className="mt-4 flex items-center justify-center gap-2 text-sm text-ink-3">
@@ -225,11 +226,22 @@ export function FilingFlow() {
         <SaveStatus state={saveState} configured={auth.configured} signedIn={signedIn} />
         <div className="mt-2 flex gap-1.5" aria-hidden>
           {PHASES.map((p, i) => (
-            <div key={p} className={cn("h-1.5 flex-1 rounded-full transition-colors", i < pIdx ? "bg-brand" : i === pIdx ? "bg-ink" : "bg-line")} />
+            <div key={p} className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
+              <motion.div className="h-full origin-left rounded-full bg-obsidian" initial={false} animate={{ scaleX: i <= pIdx ? 1 : 0, opacity: i < pIdx ? 0.55 : 1 }} transition={{ duration: DURATION.sequence, ease: EASE.out }} />
+            </div>
           ))}
         </div>
       </div>
-      {body}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={`${a.phase}:${(a as { next?: { id?: string } }).next?.id ?? ""}:${editing ?? ""}`}
+          initial={{ opacity: 0, x: 18 }}
+          animate={{ opacity: 1, x: 0, transition: { duration: DURATION.page, ease: EASE.out } }}
+          exit={{ opacity: 0, x: -18, transition: { duration: DURATION.hover, ease: EASE.inOut } }}
+        >
+          {body}
+        </motion.div>
+      </AnimatePresence>
     </Shell>
   );
 }
@@ -255,5 +267,5 @@ function Shell({ children }: { children: React.ReactNode }) {
 }
 
 function Num({ n }: { n: number }) {
-  return <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-ink text-sm font-bold text-mint">{n}</span>;
+  return <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-obsidian text-sm font-bold text-mint">{n}</span>;
 }

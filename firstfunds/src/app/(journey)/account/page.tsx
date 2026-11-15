@@ -96,7 +96,7 @@ export default function AccountPage() {
             </div>
           </div>
           <div className="mt-6 space-y-3">
-            <Link href="/taxes" className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-ink font-semibold text-paper">
+            <Link href="/taxes" className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-obsidian font-semibold text-paper">
               <Cloud size={18} /> Continue your taxes
             </Link>
             <button onClick={signOut} className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl border-2 border-line bg-card font-semibold">
@@ -141,7 +141,7 @@ export default function AccountPage() {
                 />
               </div>
             </label>
-            <button type="submit" disabled={busy} className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl bg-ink font-semibold text-paper disabled:opacity-50">
+            <button type="submit" disabled={busy} className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl bg-obsidian font-semibold text-paper disabled:opacity-50">
               {busy ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />} Email me a sign-in link
             </button>
           </form>

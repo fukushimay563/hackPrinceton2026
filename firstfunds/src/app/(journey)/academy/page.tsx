@@ -38,7 +38,7 @@ export default function AcademyPage() {
     <div>
       <div className="grid items-end gap-6 md:grid-cols-[1fr_340px]">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-2">
+          <div className="inline-flex items-center gap-2 rounded-md bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-2">
             <GraduationCap size={14} /> Financial Advisory Academy
           </div>
           <h1 className="mt-3 text-3xl leading-tight font-semibold tracking-tight sm:text-4xl">Learn taxes before you file your first return</h1>
@@ -64,11 +64,11 @@ export default function AcademyPage() {
             <div className="h-2 rounded-full bg-brand transition-all duration-500" style={{ width: `${(s.done / s.total) * 100}%` }} />
           </div>
           {s.next ? (
-            <button onClick={() => setOpen(s.next!.id)} className="mt-4 flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-ink font-semibold text-paper">
+            <button onClick={() => setOpen(s.next!.id)} className="mt-4 flex w-full min-h-12 items-center justify-center gap-2 rounded-md bg-accent font-semibold text-on-accent">
               {s.done ? "Continue" : "Start"}: {s.next.title} <ArrowRight size={16} />
             </button>
           ) : (
-            <Link href="/taxes" className="mt-4 flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-brand font-semibold text-on-brand">
+            <Link href="/taxes" className="mt-4 flex w-full min-h-12 items-center justify-center gap-2 rounded-md bg-accent font-semibold text-on-accent">
               Course complete. Start your return <ArrowRight size={16} />
             </Link>
           )}
@@ -89,7 +89,7 @@ export default function AcademyPage() {
       {s.badges.length > 0 && (
         <div className="mt-6 flex flex-wrap gap-2" aria-label="Badges earned">
           {s.badges.map((b) => (
-            <span key={b} className="inline-flex items-center gap-1.5 rounded-full bg-warn-soft px-3 py-1.5 text-sm font-semibold text-warn">
+            <span key={b} className="inline-flex items-center gap-1.5 rounded-md bg-warn-soft px-3 py-1.5 text-sm font-semibold text-warn">
               <Award size={15} /> {b}
             </span>
           ))}
@@ -210,7 +210,7 @@ function LessonView({
       </div>
       <div className="mt-3 flex gap-1" aria-hidden>
         {Array.from({ length: steps }, (_, i) => (
-          <div key={i} className={cn("h-1.5 flex-1 rounded-full", i < pos ? "bg-brand" : i === pos ? "bg-ink" : "bg-line")} />
+          <div key={i} className={cn("h-1.5 flex-1 rounded-full", i < pos ? "bg-brand" : i === pos ? "bg-obsidian" : "bg-line")} />
         ))}
       </div>
       <h1 className="mt-5 text-2xl font-semibold tracking-tight sm:text-3xl">{lesson.title}</h1>
@@ -231,7 +231,7 @@ function LessonView({
                   Back
                 </button>
               )}
-              <button onClick={() => nextFromCard(stage.i)} className="min-h-14 flex-1 rounded-2xl bg-ink font-semibold text-paper">
+              <button onClick={() => nextFromCard(stage.i)} className="min-h-14 flex-1 rounded-md bg-accent font-semibold text-on-accent">
                 Next
               </button>
             </div>
@@ -241,7 +241,7 @@ function LessonView({
         {stage.kind === "try" && lesson.tryIt && (
           <div>
             <TryIt kind={lesson.tryIt} />
-            <button onClick={() => setStage({ kind: "quiz", i: 0 })} className="mt-4 w-full min-h-14 rounded-2xl bg-ink font-semibold text-paper">
+            <button onClick={() => setStage({ kind: "quiz", i: 0 })} className="mt-4 w-full min-h-14 rounded-md bg-accent font-semibold text-on-accent">
               Quick quiz ({lesson.quiz.length} questions)
             </button>
           </div>
@@ -269,11 +269,11 @@ function LessonView({
             <div className="mt-6 space-y-3">
               {passed ? (
                 isLast ? (
-                  <Link href="/taxes" className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl bg-brand font-semibold text-on-brand">
+                  <Link href="/taxes" className="flex w-full min-h-14 items-center justify-center gap-2 rounded-md bg-accent font-semibold text-on-accent">
                     Use it: start your return <ArrowRight size={18} />
                   </Link>
                 ) : (
-                  <button onClick={onNext} className="w-full min-h-14 rounded-2xl bg-ink font-semibold text-paper">
+                  <button onClick={onNext} className="w-full min-h-14 rounded-md bg-accent font-semibold text-on-accent">
                     Next lesson
                   </button>
                 )
@@ -284,7 +284,7 @@ function LessonView({
                     setPicked(null);
                     setStage({ kind: "card", i: 0 });
                   }}
-                  className="w-full min-h-14 rounded-2xl bg-ink font-semibold text-paper"
+                  className="w-full min-h-14 rounded-md bg-accent font-semibold text-on-accent"
                 >
                   Review and try again
                 </button>
@@ -368,7 +368,7 @@ function QuizStep({
             <b>{picked === q.correct ? "Correct. " : "Not quite. "}</b>
             {q.explain}
           </p>
-          <button onClick={onNext} className="mt-3 w-full min-h-14 rounded-2xl bg-ink font-semibold text-paper">
+          <button onClick={onNext} className="mt-3 w-full min-h-14 rounded-md bg-accent font-semibold text-on-accent">
             {index + 1 < total ? "Next question" : "See results"}
           </button>
         </div>

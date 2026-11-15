@@ -11,18 +11,18 @@ import { TutorChat } from "@/components/TutorChat";
 import { Card, PageHeader } from "@/components/ui";
 
 export default function TutorPage() {
-  const { paycheck, card, tax } = useApp();
+  const { paycheck, card, tax, chat } = useApp();
   const pay = computePaycheck(paycheck);
   const c = cardSummary(card);
   const t = tax.wages > 0 ? computeTax(tax) : null;
 
   return (
     <div>
-      <PageHeader
+      {chat.length > 0 && <PageHeader
         step="FinPilot AI Assistant"
         title="Your AI financial advisor"
         subtitle="Ask in plain English. Answers use your own numbers and cite IRS and CFPB sources."
-      />
+      />}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <TutorChat />

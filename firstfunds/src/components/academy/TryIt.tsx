@@ -11,7 +11,7 @@ const usd = (n: number, cents = false) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 });
 
 // Sequential blue ramp for bracket rates (one hue, light → dark).
-const RATE_COLORS: Record<number, string> = { 0.1: "#9ec5f4", 0.12: "#6da7ec", 0.22: "#3987e5", 0.24: "#256abf", 0.32: "#184f95", 0.35: "#104281", 0.37: "#0d366b" };
+const RATE_COLORS: Record<number, string> = { 0.1: "#a8a6a4", 0.12: "#8a8887", 0.22: "#6d6c6b", 0.24: "#555352", 0.32: "#3f3d3b", 0.35: "#2c2b2a", 0.37: "#1a1919" };
 
 export function TryIt({ kind }: { kind: TryItKind }) {
   return (
@@ -43,7 +43,7 @@ function W2Explorer() {
   return (
     <div>
       <p className="mb-3 text-sm text-ink-2">Tap a box on this sample W-2.</p>
-      <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-ink/20 bg-[#fffdf6]">
+      <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-ink/20 bg-card">
         {BOXES.map((x) => (
           <button
             key={x.n}
@@ -139,7 +139,7 @@ function StdDeduction() {
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
         {(["single", "mfj", "hoh"] as FilingStatus[]).map((s) => (
-          <button key={s} onClick={() => setStatus(s)} className={cn("rounded-full border-2 px-3 py-1.5 text-sm font-semibold", status === s ? "border-brand bg-brand-soft" : "border-line")}>
+          <button key={s} onClick={() => setStatus(s)} className={cn("rounded-md border-2 px-3 py-1.5 text-sm font-semibold", status === s ? "border-brand bg-brand-soft" : "border-line")}>
             {FILING_STATUS_LABEL[s]}
           </button>
         ))}
@@ -205,7 +205,7 @@ function SelfEmployment() {
 
 function Box({ label, v, strong }: { label: string; v: string; strong?: boolean }) {
   return (
-    <div className={cn("rounded-xl p-3", strong ? "bg-ink text-paper" : "bg-paper")}>
+    <div className={cn("rounded-xl p-3", strong ? "bg-obsidian text-paper" : "bg-paper")}>
       <div className={cn("text-[11px] leading-tight", strong ? "text-paper/70" : "text-ink-3")}>{label}</div>
       <div className="num mt-1 font-semibold">{v}</div>
     </div>

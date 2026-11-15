@@ -1,3 +1,4 @@
+import "@fontsource-variable/inter";
 import type { Metadata, Viewport } from "next";
 import { Providers } from "@/components/Providers";
 import "./globals.css";
@@ -10,8 +11,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f4ee" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b1422" },
+    { media: "(prefers-color-scheme: light)", color: "#f4f2f0" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f0e0d" },
   ],
 };
 
