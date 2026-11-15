@@ -18,6 +18,7 @@ import { tool, todoListMiddleware } from "langchain";
 import { AIMessage } from "@langchain/core/messages";
 import { Command, MemorySaver } from "@langchain/langgraph";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { geminiApiKey, geminiModel, logGeminiRequest } from "../server/gemini";
 import { z } from "zod";
 import { TAX_YEAR } from "../finance/tax2025";
 import { log } from "./logger";
@@ -210,7 +211,9 @@ function mockPolicy(ws: Workspace): Policy {
 
 function makeModel(ws: Workspace) {
   if (agentMode() === "gemini") {
-    return new ChatGoogleGenerativeAI({ model: process.env.GEMINI_MODEL || "gemini-2.5-flash", apiKey: process.env.GEMINI_API_KEY, temperature: 0 });
+    // Same model selection as every other AI path (GEMINI_MODEL, else the documented fallback).
+    logGeminiRequest("agents-supervisor", { outcome: "gemini" });
+    return new ChatGoogleGenerativeAI({ model: geminiModel(), apiKey: geminiApiKey(), temperature: 0 });
   }
   return new PolicyChatModel(mockPolicy(ws));
 }

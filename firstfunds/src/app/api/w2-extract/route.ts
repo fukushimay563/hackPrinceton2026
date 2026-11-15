@@ -1,6 +1,6 @@
 // Reads a W-2 image/PDF with Gemini and returns only the boxes we need.
 // The file is processed in memory and never written to disk or logged.
-import { describeGeminiError, geminiClient, geminiModel } from "@/lib/server/gemini";
+import { describeGeminiError, geminiClient, geminiModel, logGeminiRequest } from "@/lib/server/gemini";
 import { rateLimit } from "@/lib/server/rateLimit";
 
 
@@ -41,12 +41,13 @@ export async function POST(req: Request) {
       ],
       config: { responseMimeType: "application/json", temperature: 0 },
     });
+    logGeminiRequest("w2-extract", { outcome: "gemini", servedBy: res.modelVersion });
     const parsed = sanitize(JSON.parse(res.text ?? "{}"));
     if (!parsed.isW2) return Response.json({ error: "That doesn't look like a W-2. Try another image or enter it manually." }, { status: 422 });
     return Response.json({ fields: parsed });
   } catch (e) {
     const reason = e instanceof SyntaxError ? "The reader returned something we couldn't parse." : describeGeminiError(e);
-    console.error("W-2 extraction failed:", reason);
+    logGeminiRequest("w2-extract", { outcome: "error", reason });
     return Response.json({ error: `Couldn't read that W-2 (${reason}) Please enter the numbers manually.` }, { status: 502 });
   }
 }
