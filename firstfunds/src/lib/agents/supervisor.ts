@@ -91,7 +91,9 @@ const checkpointer = (g.__ffCheckpointer ??= new MemorySaver());
 const workspaces = (g.__ffWorkspaces ??= new Map<string, Workspace>());
 
 export function agentMode(): "mock" | "gemini" {
-  return process.env.GEMINI_API_KEY && process.env.AGENT_MODE !== "mock" ? "gemini" : "mock";
+  // LangChain's Gemini model only speaks the Gemini Developer API, so a Vertex express key runs the deterministic policy.
+  const vertex = /^(true|1)$/i.test(process.env.GEMINI_USE_VERTEX ?? process.env.GOOGLE_GENAI_USE_VERTEXAI ?? "");
+  return process.env.GEMINI_API_KEY && process.env.AGENT_MODE !== "mock" && !vertex ? "gemini" : "mock";
 }
 
 function buildTools(ws: Workspace, emit: (e: Omit<AgentEvent, "seq" | "at">) => void) {
@@ -208,7 +210,7 @@ function mockPolicy(ws: Workspace): Policy {
 
 function makeModel(ws: Workspace) {
   if (agentMode() === "gemini") {
-    return new ChatGoogleGenerativeAI({ model: process.env.GEMINI_MODEL || "gemini-flash-latest", apiKey: process.env.GEMINI_API_KEY, temperature: 0 });
+    return new ChatGoogleGenerativeAI({ model: process.env.GEMINI_MODEL || "gemini-2.5-flash", apiKey: process.env.GEMINI_API_KEY, temperature: 0 });
   }
   return new PolicyChatModel(mockPolicy(ws));
 }

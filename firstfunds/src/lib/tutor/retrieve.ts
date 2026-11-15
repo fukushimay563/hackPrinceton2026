@@ -24,10 +24,11 @@ const SYNONYMS: Record<string, string[]> = {
 function tokenize(s: string) {
   return s
     .toLowerCase()
+    .replace(/\bw-?(2|4)\b/g, "w$1") // keep form names (W-2, W-4) as one token
     .replace(/[^a-z0-9$%. ]/g, " ")
     .split(/\s+/)
     .map((t) => t.replace(/[.]+$/, ""))
-    .filter((t) => t && !STOP.has(t));
+    .filter((t) => t.length > 1 && !STOP.has(t));
 }
 
 const docTokens = CORPUS.map((d) => tokenize(`${d.title} ${d.text}`));

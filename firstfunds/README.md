@@ -19,7 +19,7 @@ Everything works with **no keys at all** (sample data, offline FinPilot, progres
 npm install
 cp .env.example .env.local   # optional
 npm run dev                  # http://localhost:3000
-npm test                     # 54 tests: engines, question minimizer, Academy, agents/Photon/security, database RLS
+npm test                     # 81 tests: engines, question minimizer, Academy, agents/Photon/security, database RLS
 ```
 
 Requires Node 20.9+.

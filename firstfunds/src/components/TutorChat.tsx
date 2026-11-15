@@ -263,7 +263,13 @@ export function TutorChat({ compact = false }: { compact?: boolean }) {
                   <div className="rounded-2xl rounded-tl-md border border-line bg-card px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-ink">
                     {renderWithCitations(m.content, m.sources)}
                   </div>
-                  {m.mode === "offline" && <div className="mt-1 pl-1 text-[11px] text-ink-3">Answered offline from FirstFunds&apos; built-in guides.</div>}
+                  {m.mode === "offline" && (
+                    <div className="mt-1 pl-1 text-[11px] text-ink-3">
+                      Answered offline from FirstFunds&apos; built-in guides.
+                      {m.fallbackReason && <span className="text-warn"> Gemini wasn&apos;t used: {m.fallbackReason}</span>}
+                    </div>
+                  )}
+                  {m.mode === "gemini" && <div className="mt-1 pl-1 text-[11px] text-ink-3">Answered by Gemini using your numbers and the sources below.</div>}
                   {m.sources && m.sources.length > 0 && (
                     <div className="mt-2">
                       <div className="mb-1.5 flex items-center gap-1 pl-1 text-[11px] font-semibold tracking-wide text-ink-3 uppercase">

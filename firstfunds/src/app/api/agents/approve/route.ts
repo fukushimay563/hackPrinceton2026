@@ -26,12 +26,16 @@ export async function POST(req: Request) {
     throw e;
   }
 
-  // Consent-based notification (mock transport here; live proactive sends need the
-  // Spectrum "connection and routing" setup — see docs/AGENTS.md).
+  // Consent-based notification. Live: a Photon 2.0 reply into the user's existing direct
+  // conversation (only if they opted in and haven't replied STOP). Mock: recorded only.
   let notification: unknown = { status: "not-sent" };
   if (run.status === "saved") {
-    const phone = [DEMO_PHONE].find((p) => store.phoneLink(p)?.tenant === tenant);
-    notification = phone ? (photonMode() === "mock" ? await notify(phone, "estimate-saved", run.runId, mockSender()) : { status: "live-proactive-not-enabled" }) : { status: "no-linked-phone" };
+    const phone = [DEMO_PHONE, ...store.phonesFor(tenant)].find((p) => store.phoneLink(p)?.tenant === tenant);
+    try {
+      notification = phone ? await notify(phone, "estimate-saved", run.runId, photonMode() === "mock" ? mockSender() : undefined) : { status: "no-linked-phone" };
+    } catch {
+      notification = { status: "failed" };
+    }
   }
   // Keep the console's last full result, adding the approval outcome.
   const prev = demoRun() as { events?: unknown[] } | null;

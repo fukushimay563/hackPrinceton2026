@@ -16,7 +16,7 @@
     "@langchain/core": "^1.4.1",
     "@langchain/google-genai": "^2.3.6",
     "@langchain/langgraph": "^1.7.4",
-    "@spectrum-ts/core": "^12.16.0",
+    "@photon-ai/api": "^0.6.0",
     "@supabase/supabase-js": "^2.119.0",
     "deepagents": "^1.16.5",
     "framer-motion": "^14.14.0",
@@ -27,7 +27,6 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "recharts": "^3.10.1",
-    "spectrum-ts": "^12.16.0",
     "zod": "^4.6.7",
     "zustand": "^5.1.0"
   },
@@ -48,6 +47,6 @@
     "vite-plugin-singlefile": "^2.3.4"
   },
   "engines": {
-    "node": ">=20.9"
+    "node": ">=22"
   }
 }

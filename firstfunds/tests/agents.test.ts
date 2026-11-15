@@ -146,7 +146,7 @@ test("webhook: valid signature accepted; forged, tampered, stale and unsigned re
 test("duplicate deliveries are processed once and never re-send", async () => {
   const d = signMockDelivery({ text: "Is my return ready?", from: DEMO_PHONE });
   const v = await verifyDelivery(enc(d.body), d.headers, mockSecret());
-  assert.ok(v.ok);
+  assert.ok(v.ok && v.inbound);
   const sender = mockSender();
   const first = await handleInbound(v.inbound, sender);
   const second = await handleInbound(v.inbound, sender);
@@ -173,7 +173,7 @@ test("failed deliveries retry with a limit and are recorded, not lost", async ()
 test("unlinked numbers get no taxpayer data; threads and tokens are tenant-bound", async () => {
   const d = signMockDelivery({ text: "What's Maya's refund?", from: "+15555550999" });
   const v = await verifyDelivery(enc(d.body), d.headers, mockSecret());
-  assert.ok(v.ok);
+  assert.ok(v.ok && v.inbound);
   const sender = mockSender();
   const r = await handleInbound(v.inbound, sender);
   assert.equal(r.status, "unlinked");
@@ -250,7 +250,7 @@ test("no messages without consent; STOP/START honored; notifications carry no am
   // Build a conversation so notify() has a space to use.
   const d = signMockDelivery({ text: "Is my return ready?", from: DEMO_PHONE });
   const v = await verifyDelivery(enc(d.body), d.headers, mockSecret());
-  assert.ok(v.ok);
+  assert.ok(v.ok && v.inbound);
   await handleInbound(v.inbound, mockSender());
 
   const s1 = mockSender();
@@ -260,7 +260,7 @@ test("no messages without consent; STOP/START honored; notifications carry no am
 
   const stop = signMockDelivery({ text: "STOP", from: DEMO_PHONE });
   const vs = await verifyDelivery(enc(stop.body), stop.headers, mockSecret());
-  assert.ok(vs.ok);
+  assert.ok(vs.ok && vs.inbound);
   const r = await handleInbound(vs.inbound, mockSender());
   assert.equal(r.status, "opted-out");
   const s2 = mockSender();
@@ -270,7 +270,7 @@ test("no messages without consent; STOP/START honored; notifications carry no am
   // While stopped, ordinary messages get no reply at all.
   const q = signMockDelivery({ text: "hello?", from: DEMO_PHONE });
   const vq = await verifyDelivery(enc(q.body), q.headers, mockSecret());
-  assert.ok(vq.ok);
+  assert.ok(vq.ok && vq.inbound);
   const s3 = mockSender();
   assert.equal((await handleInbound(vq.inbound, s3)).status, "stopped");
   assert.equal(s3.sent.length, 0);
@@ -284,7 +284,7 @@ test("conversational answer to the dependent question is recorded as the user's 
   const send = async (text: string) => {
     const d = signMockDelivery({ text, from: DEMO_PHONE });
     const v = await verifyDelivery(enc(d.body), d.headers, mockSecret());
-    assert.ok(v.ok);
+    assert.ok(v.ok && v.inbound);
     return handleInbound(v.inbound, mockSender());
   };
   const first = await send("Is my return ready?");
@@ -317,7 +317,7 @@ test("regression: approval works when the secure link came from the text convers
   // 1. User texts → reply carries a link bound to the TEXT thread.
   const d = signMockDelivery({ text: "Is my return ready?", from: DEMO_PHONE });
   const v = await verifyDelivery(enc(d.body), d.headers, mockSecret());
-  assert.ok(v.ok);
+  assert.ok(v.ok && v.inbound);
   const first = await handleInbound(v.inbound, mockSender());
   store.setAnswer(DEMO_TENANT, "dependent", "no", "photon");
   const token = decodeURIComponent(first.run!.reply!.secureLink!.split("token=")[1]);
@@ -334,4 +334,194 @@ test("regression: approval works when the secure link came from the text convers
   assert.equal(ok.status, "saved");
   // Resuming a thread with nothing paused fails loudly instead of silently.
   await assert.rejects(runSupervisor({ tenant: DEMO_TENANT, threadId: `${DEMO_TENANT}:web`, channel: "web", resume: "approve" }), /Nothing on this conversation/);
+});
+
+// ------------------------------------------------------------------ Photon → FinPilot routing
+test("general questions from any number get a FinPilot answer with no personal data", async () => {
+  const d = signMockDelivery({ text: "What is the standard deduction for 2025?", from: "+15555550888" });
+  const v = await verifyDelivery(enc(d.body), d.headers, mockSecret());
+  assert.ok(v.ok && v.inbound);
+  const sender = mockSender();
+  const r = await handleInbound(v.inbound, sender);
+  assert.equal(r.status, "answered");
+  assert.equal(r.route, "finpilot");
+  assert.ok(!r.run, "supervisor must not run for general questions");
+  assert.equal(sender.sent.length, 1);
+  assert.doesNotMatch(sender.sent[0], /\[\d+\]/, "citation markers are stripped for iMessage");
+  assert.doesNotMatch(sender.sent[0], /41,600|Maya/, "no demo taxpayer data in a general answer");
+});
+
+test("personal questions from unlinked numbers get the link prompt, not data", async () => {
+  for (const text of ["Is my refund ready?", "What's Maya's refund?"]) {
+    const d = signMockDelivery({ text, from: "+15555550777" });
+    const v = await verifyDelivery(enc(d.body), d.headers, mockSecret());
+    assert.ok(v.ok && v.inbound);
+    const sender = mockSender();
+    const r = await handleInbound(v.inbound, sender);
+    assert.equal(r.status, "unlinked", text);
+    assert.match(sender.sent[0], /link this number/);
+  }
+});
+
+test("linked numbers: personal → supervisor, general → FinPilot without their numbers", async () => {
+  const personal = signMockDelivery({ text: "Is my return ready?", from: DEMO_PHONE });
+  const pv = await verifyDelivery(enc(personal.body), personal.headers, mockSecret());
+  assert.ok(pv.ok && pv.inbound);
+  const r1 = await handleInbound(pv.inbound, mockSender());
+  assert.equal(r1.route, "supervisor");
+  assert.ok(r1.run);
+
+  const general = signMockDelivery({ text: "How does credit card APR work?", from: DEMO_PHONE });
+  const gv = await verifyDelivery(enc(general.body), general.headers, mockSecret());
+  assert.ok(gv.ok && gv.inbound);
+  const sender = mockSender();
+  const r2 = await handleInbound(gv.inbound, sender);
+  assert.equal(r2.route, "finpilot");
+  assert.ok(!r2.run);
+});
+
+test("STOP is honoured for unlinked numbers too", async () => {
+  const from = "+15555550666";
+  const stop = signMockDelivery({ text: "STOP", from });
+  const sv = await verifyDelivery(enc(stop.body), stop.headers, mockSecret());
+  assert.ok(sv.ok && sv.inbound);
+  assert.equal((await handleInbound(sv.inbound, mockSender())).status, "opted-out");
+  const q = signMockDelivery({ text: "What is a W-2?", from });
+  const qv = await verifyDelivery(enc(q.body), q.headers, mockSecret());
+  assert.ok(qv.ok && qv.inbound);
+  const sender = mockSender();
+  assert.equal((await handleInbound(qv.inbound, sender)).status, "stopped");
+  assert.equal(sender.sent.length, 0);
+});
+
+test("PHOTON_DEMO_NUMBERS link to the synthetic demo taxpayer, labelled as demo", async () => {
+  process.env.PHOTON_DEMO_NUMBERS = "+15555550444";
+  try {
+    const d = signMockDelivery({ text: "Is my return ready?", from: "+15555550444" });
+    const v = await verifyDelivery(enc(d.body), d.headers, mockSecret());
+    assert.ok(v.ok && v.inbound);
+    const sender = mockSender();
+    const r = await handleInbound(v.inbound, sender);
+    assert.equal(r.route, "supervisor");
+    assert.equal(store.phoneLink("+15555550444")?.tenant, DEMO_TENANT);
+    assert.equal(store.phoneLink("+15555550444")?.notifyConsent, false);
+    assert.match(sender.sent[0], /Demo data/);
+  } finally {
+    delete process.env.PHOTON_DEMO_NUMBERS;
+  }
+});
+
+test("public amounts are allowed only for context-free answers; identifiers never", () => {
+  assert.equal(isSafeForMessage("The 2025 standard deduction is $15,750."), false);
+  assert.equal(isSafeForMessage("The 2025 standard deduction is $15,750.", { allowPublicAmounts: true }), true);
+  assert.equal(isSafeForMessage("Your SSN 123-45-6789 is on file", { allowPublicAmounts: true }), false);
+});
+
+// ------------------------------------------------------------------ Photon 2.0 (Beta) contract
+import { decodeWebhookSecret, describePhotonError, liveSender, photonConfigProblems, verifyStandardWebhook } from "../src/lib/photon/transport";
+
+test("Standard Webhooks: published test vector verifies", () => {
+  const key = decodeWebhookSecret("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw")!;
+  const headers = new Headers({ "webhook-id": "msg_p5jXN8AQM9LWM0D4loKWxJek", "webhook-timestamp": "1614265330", "webhook-signature": "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=" });
+  const r = verifyStandardWebhook(enc('{"test": 2432232314}'), headers, key, 1614265330 * 1000);
+  assert.deepEqual(r, { ok: true, webhookId: "msg_p5jXN8AQM9LWM0D4loKWxJek" });
+  assert.equal(verifyStandardWebhook(enc('{"test": 2432232315}'), headers, key, 1614265330 * 1000).ok, false);
+});
+
+test("Photon 2.0 webhook: event id must match the signed webhook-id; other events are acknowledged", async () => {
+  const d = signMockDelivery({ text: "hi", from: DEMO_PHONE });
+  const spliced = d.body.replace(/"id":"pho_evt_[^"]+"/, '"id":"pho_evt_other"');
+  const key = decodeWebhookSecret(mockSecret())!;
+  const ts = d.headers.get("webhook-timestamp")!;
+  const id = d.headers.get("webhook-id")!;
+  const sig = createHmac("sha256", key).update(`${id}.${ts}.${spliced}`).digest("base64");
+  const h = new Headers({ "webhook-id": id, "webhook-timestamp": ts, "webhook-signature": `v1,${sig}` });
+  const r = await verifyDelivery(enc(spliced), h, mockSecret());
+  assert.deepEqual(r.ok ? null : [r.status, r.reason], [401, "event-id-mismatch"]);
+
+  const other = JSON.stringify({ id: "pho_evt_1", type: "space.typing.update", data: { object: {} } });
+  const s2 = createHmac("sha256", key).update(`pho_evt_1.${ts}.${other}`).digest("base64");
+  const r2 = await verifyDelivery(enc(other), new Headers({ "webhook-id": "pho_evt_1", "webhook-timestamp": ts, "webhook-signature": `v1,${s2}` }), mockSecret());
+  assert.ok(r2.ok && !r2.inbound);
+});
+
+test("Photon 2.0 webhook: group chats are never answered; inbound carries the receiving line", async () => {
+  const g = signMockDelivery({ text: "Is my return ready?", from: DEMO_PHONE, spaceKind: "group" });
+  const gv = await verifyDelivery(enc(g.body), g.headers, mockSecret());
+  assert.ok(gv.ok && !gv.inbound && gv.ignored === "not-direct");
+  const d = signMockDelivery({ text: "hi", from: DEMO_PHONE });
+  const v = await verifyDelivery(enc(d.body), d.headers, mockSecret());
+  assert.ok(v.ok && v.inbound);
+  assert.equal(v.inbound.senderId, DEMO_PHONE);
+  assert.equal(v.inbound.agentUserId, "pho_usr_mock_agent");
+});
+
+const SENT_EXAMPLE = '{"content":{"format":"plain","text":"Hello from Photon.","type":"text"},"createdAt":"2026-01-01T00:00:00.000Z","id":"pho_msg_00000000000000000000000001","metadata":{},"platform":"imessage","projectId":"pho_prj_00000000000000000000000001","sentBy":{"details":{"resourceId":"pho_res_00000000000000000000000001","type":"shared"},"handle":"+14155550123","id":"pho_usr_00000000000000000000000001","kind":"agent","metadata":{},"platform":"imessage","projectId":"pho_prj_00000000000000000000000001"},"space":{"details":{},"id":"pho_spc_00000000000000000000000001","kind":"direct","metadata":{},"participantIds":["pho_usr_00000000000000000000000001","pho_usr_00000000000000000000000002"],"platform":"imessage","projectId":"pho_prj_00000000000000000000000001"},"status":"dispatched","timestamps":{"dispatchedAt":"2026-01-01T00:00:00.000Z"},"updatedAt":"2026-01-01T00:00:00.000Z"}';
+
+test("live sender calls POST /v1/projects/{id}/messages with Bearer key and an idempotency key", async () => {
+  const saved = { ...process.env };
+  const realFetch = globalThis.fetch;
+  const calls: { url: string; method: string; headers: Headers; body: unknown }[] = [];
+  process.env.PHOTON_PROJECT_ID = "pho_prj_0abcdefghjkmnpqrstvwxyz12";
+  process.env.PHOTON_API_KEY = "pho_sk_test_not_real";
+  process.env.PHOTON_WEBHOOK_SECRET = mockSecret();
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const req = input instanceof Request ? input : new Request(input, init);
+    calls.push({ url: req.url, method: req.method, headers: req.headers, body: await req.clone().json() });
+    // Shape of the documented 202 example for sendMessage (docs/sdk/projects/send-message).
+    return new Response(SENT_EXAMPLE, { status: 202, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    const sender = liveSender({ spaceId: "pho_spc_1", agentUserId: "pho_usr_agent", parentMessageId: "pho_msg_in" });
+    const r = await sendSafely(sender, DEMO_TENANT, "pho_spc_1", "Hello from FinPilot.", "reply:pho_msg_in");
+    assert.equal(r.status, "sent");
+    assert.equal(calls.length, 1);
+    const c = calls[0];
+    assert.equal(c.method, "POST");
+    assert.equal(c.url, "https://api.photon.codes/v1/projects/pho_prj_0abcdefghjkmnpqrstvwxyz12/messages");
+    assert.equal(c.headers.get("authorization"), "Bearer pho_sk_test_not_real");
+    assert.equal(c.headers.get("idempotency-key"), "firstfunds:reply:pho_msg_in");
+    assert.deepEqual(c.body, { spaceId: "pho_spc_1", senderId: "pho_usr_agent", content: { type: "text", format: "plain", text: "Hello from FinPilot." }, parentMessageId: "pho_msg_in" });
+  } finally {
+    globalThis.fetch = realFetch;
+    process.env = saved;
+  }
+});
+
+test("Photon config checks name bad settings without echoing secrets", () => {
+  const p = photonConfigProblems({ PHOTON_PROJECT_ID: "prj_123", PHOTON_API_KEY: "sk_live_SECRETVALUE", PHOTON_WEBHOOK_SECRET: "notwhsec" } as unknown as NodeJS.ProcessEnv);
+  assert.equal(p.length, 3);
+  assert.ok(p.every((m) => !m.includes("SECRETVALUE") && !m.includes("notwhsec")));
+  assert.deepEqual(photonConfigProblems({ PHOTON_PROJECT_ID: "pho_prj_0abc", PHOTON_API_KEY: "pho_sk_x", PHOTON_WEBHOOK_SECRET: mockSecret() } as unknown as NodeJS.ProcessEnv), []);
+  const msg = describePhotonError({ status: 401, body: { code: "UNAUTHENTICATED" }, requestId: "req_1", headers: { authorization: "Bearer pho_sk_x" } });
+  assert.equal(msg, "Photon API 401 UNAUTHENTICATED (request req_1)");
+});
+
+test("production refuses mock webhook deliveries when Photon isn't configured", async () => {
+  const saved = { ...process.env };
+  for (const k of ["PHOTON_PROJECT_ID", "PHOTON_API_KEY", "PHOTON_WEBHOOK_SECRET", "ENABLE_AGENT_DEMO", "VERCEL"]) delete process.env[k];
+  (process.env as Record<string, string>).NODE_ENV = "production";
+  try {
+    const { POST } = await import("../src/app/api/photon/webhook/route");
+    const d = signMockDelivery({ text: "hi", from: DEMO_PHONE });
+    const res = await POST(new Request("http://localhost/api/photon/webhook", { method: "POST", headers: d.headers, body: d.body }));
+    assert.equal(res.status, 503);
+  } finally {
+    process.env = saved;
+  }
+});
+
+test("live webhook rejects deliveries not signed with the project's whsec_ secret", async () => {
+  const saved = { ...process.env };
+  process.env.PHOTON_PROJECT_ID = "pho_prj_0abcdefghjkmnpqrstvwxyz12";
+  process.env.PHOTON_API_KEY = "pho_sk_test_not_real";
+  process.env.PHOTON_WEBHOOK_SECRET = `whsec_${Buffer.from("real-destination-secret").toString("base64")}`;
+  try {
+    const { POST } = await import("../src/app/api/photon/webhook/route");
+    const d = signMockDelivery({ text: "hi", from: DEMO_PHONE }); // signed with the MOCK secret
+    const res = await POST(new Request("http://localhost/api/photon/webhook", { method: "POST", headers: d.headers, body: d.body }));
+    assert.equal(res.status, 401);
+  } finally {
+    process.env = saved;
+  }
 });

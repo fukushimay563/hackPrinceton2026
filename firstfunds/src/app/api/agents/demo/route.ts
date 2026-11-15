@@ -1,5 +1,6 @@
-// Judge demo driver (MOCK MODE ONLY). Builds a native Photon delivery, signs it like
-// Spectrum Cloud, and pushes it through the real verification + agent pipeline.
+// Judge demo driver (MOCK MODE ONLY). Builds a Photon 2.0 `message.received` delivery,
+// signs it with Standard Webhooks like Photon does, and pushes it through the real
+// verification + agent pipeline.
 import { DEMO_PHONE, seedDemoTenant } from "@/lib/agents/documents";
 import { demoChat, demoEnabled, notFound, resetDemoChat, setDemoRun } from "@/lib/agents/demoGuard";
 import { store } from "@/lib/agents/store";
@@ -36,6 +37,7 @@ export async function POST(req: Request) {
     const headers = new Headers(lastDelivery.headers);
     const v = await verifyDelivery(new TextEncoder().encode(lastDelivery.body), headers, (await import("@/lib/photon/transport")).mockSecret());
     if (!v.ok) return Response.json({ verification: { ok: false, status: v.status, reason: v.reason } });
+    if (!v.inbound) return Response.json({ verification: { ok: true }, status: "ignored" });
     const sender = mockSender();
     const result = await handleInbound(v.inbound, sender);
     return Response.json({ verification: { ok: true }, status: result.status, sent: sender.sent.length });
@@ -50,6 +52,7 @@ export async function POST(req: Request) {
     lastDelivery.headers = [...d.headers.entries()];
     const v = await verifyDelivery(new TextEncoder().encode(d.body), d.headers, (await import("@/lib/photon/transport")).mockSecret());
     if (!v.ok) return Response.json({ verification: { ok: false, status: v.status, reason: v.reason } }, { status: v.status });
+    if (!v.inbound) return Response.json({ verification: { ok: true }, status: "ignored" });
     demoChat.push({ from: "user", text, at: Date.now() });
     const sender = mockSender();
     const result = await handleInbound(v.inbound, sender);

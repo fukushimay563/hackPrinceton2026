@@ -149,6 +149,10 @@ class MemoryStore {
     return this.phones.get(phone) ?? null;
   }
 
+  phonesFor(tenant: string): string[] {
+    return [...this.phones.values()].filter((p) => p.tenant === tenant).map((p) => p.phone);
+  }
+
   setStopped(phone: string, stopped: boolean) {
     const p = this.phones.get(phone);
     if (!p) return;

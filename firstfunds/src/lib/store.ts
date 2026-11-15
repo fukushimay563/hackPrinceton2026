@@ -22,6 +22,8 @@ export type ChatMessage = {
   content: string;
   sources?: { title: string; url: string }[];
   mode?: "gemini" | "offline";
+  /** Why FinPilot answered offline even though Gemini is configured (no secrets). */
+  fallbackReason?: string;
 };
 
 type State = {
