@@ -18,7 +18,7 @@ function AnswerList({ res, onChange }: { res: StepResult; onChange: (id: string)
   return (
     <section className="mt-6">
       <h3 className="text-sm font-semibold tracking-wide text-ink-3 uppercase">Your answers</h3>
-      <ul className="mt-2 divide-y divide-line rounded-2xl border border-line bg-white">
+      <ul className="mt-2 divide-y divide-line rounded-2xl border border-line bg-card">
         {qs.map((q: QuestionState) => (
           <li key={q.id} className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="min-w-0">
@@ -101,7 +101,7 @@ export function VerifyStep({ res, send, onChange }: { res: StepResult; send: (e:
         <h3 className="text-sm font-semibold tracking-wide text-ink-3 uppercase">Your income</h3>
         <ul className="mt-2 space-y-2">
           {w2s.map((d) => (
-            <li key={d.id} className="flex items-start justify-between gap-3 rounded-2xl border border-line bg-white p-4">
+            <li key={d.id} className="flex items-start justify-between gap-3 rounded-2xl border border-line bg-card p-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 font-semibold">
                   <FileText size={16} className="text-brand" /> {d.label}
@@ -131,7 +131,7 @@ export function VerifyStep({ res, send, onChange }: { res: StepResult; send: (e:
       <button
         disabled={!a.readyForReview}
         onClick={() => send({ type: "verify", verified: true }, "Calculating your estimate…")}
-        className="sticky bottom-4 mt-8 w-full min-h-14 rounded-2xl bg-brand text-base font-semibold text-white shadow-lg hover:bg-brand-2 disabled:opacity-40 disabled:shadow-none"
+        className="sticky bottom-4 mt-8 w-full min-h-14 rounded-2xl bg-brand text-base font-semibold text-on-brand shadow-lg hover:bg-brand-2 disabled:opacity-40 disabled:shadow-none"
       >
         Everything&apos;s right. Calculate my estimate
       </button>
@@ -160,7 +160,7 @@ export function EstimateStep({ res, send }: { res: StepResult; send: (e: FilingE
       </div>
 
       {d && (
-        <ol className="mt-5 divide-y divide-line rounded-2xl border border-line bg-white">
+        <ol className="mt-5 divide-y divide-line rounded-2xl border border-line bg-card">
           {d.lines.map((l) => (
             <li key={l.label} className="px-4 py-3">
               <div className="flex items-center justify-between gap-3">
@@ -193,12 +193,12 @@ export function EstimateStep({ res, send }: { res: StepResult; send: (e: FilingE
         provider.
       </p>
       <div className="mt-4 space-y-3">
-        <button onClick={() => send({ type: "approve" })} className="w-full min-h-14 rounded-2xl bg-ink text-base font-semibold text-white">
+        <button onClick={() => send({ type: "approve" })} className="w-full min-h-14 rounded-2xl bg-ink text-base font-semibold text-paper">
           <span className="inline-flex items-center gap-2">
             <Check size={18} /> Approve this draft
           </span>
         </button>
-        <button onClick={() => send({ type: "verify", verified: false })} className="w-full min-h-14 rounded-2xl border-2 border-line bg-white text-base font-semibold">
+        <button onClick={() => send({ type: "verify", verified: false })} className="w-full min-h-14 rounded-2xl border-2 border-line bg-card text-base font-semibold">
           Go back and change something
         </button>
       </div>
@@ -227,7 +227,7 @@ export function ApprovedStep({ res, onAskTutor, onRestart }: { res: StepResult; 
           href="https://www.irs.gov/filing/irs-free-file-do-your-taxes-for-free"
           target="_blank"
           rel="noreferrer"
-          className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl bg-brand text-base font-semibold text-white hover:bg-brand-2"
+          className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl bg-brand text-base font-semibold text-on-brand hover:bg-brand-2"
         >
           File free with IRS Free File <ExternalLink size={16} />
         </a>
@@ -248,7 +248,7 @@ export function ApprovedStep({ res, onAskTutor, onRestart }: { res: StepResult; 
                 "",
               )
             }
-            className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl border-2 border-line bg-white text-base font-semibold"
+            className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl border-2 border-line bg-card text-base font-semibold"
           >
             <Download size={18} /> Download review worksheet (PDF)
           </button>
@@ -262,11 +262,11 @@ export function ApprovedStep({ res, onAskTutor, onRestart }: { res: StepResult; 
               setCopied(false);
             }
           }}
-          className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl border-2 border-line bg-white text-base font-semibold"
+          className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl border-2 border-line bg-card text-base font-semibold"
         >
           <Copy size={18} /> {copied ? "Copied" : "Copy a summary"}
         </button>
-        <button onClick={onAskTutor} className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl border-2 border-line bg-white text-base font-semibold">
+        <button onClick={onAskTutor} className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl border-2 border-line bg-card text-base font-semibold">
           <Sparkles size={18} className="text-brand" /> Ask FinPilot about my return
         </button>
       </div>
@@ -285,7 +285,7 @@ export function UnsupportedStep({ res, onChange, onRestart }: { res: StepResult;
       <p className="mt-2 text-ink-2">Rather than give you a wrong number, here&apos;s what needs a different tool or a professional:</p>
       <ul className="mt-5 space-y-3">
         {res.analysis.scope.reasons.map((r) => (
-          <li key={r.id} className="rounded-2xl border border-line bg-white p-4">
+          <li key={r.id} className="rounded-2xl border border-line bg-card p-4">
             <div className="font-semibold">{r.title}</div>
             <p className="mt-1 text-sm text-ink-2">{r.detail}</p>
             {r.link && (
@@ -300,7 +300,7 @@ export function UnsupportedStep({ res, onChange, onRestart }: { res: StepResult;
         href="https://www.irs.gov/filing/irs-free-file-do-your-taxes-for-free"
         target="_blank"
         rel="noreferrer"
-        className="mt-5 flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl bg-ink text-base font-semibold text-white"
+        className="mt-5 flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl bg-ink text-base font-semibold text-paper"
       >
         See IRS Free File options <ExternalLink size={16} />
       </a>

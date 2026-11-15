@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { IS_STATIC } from "@/lib/runtime";
-import { CreditCard, FileText, Wallet } from "lucide-react";
+import { Bot, CreditCard, FileText, Wallet } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { cardSummary } from "@/lib/finance/credit";
 import { computePaycheck } from "@/lib/finance/paycheck";
@@ -20,18 +20,20 @@ export default function TutorPage() {
     <div>
       <PageHeader
         step="FinPilot AI Assistant"
-        title="Ask FinPilot anything"
-        subtitle="Money and tax questions answered with your own numbers and IRS and CFPB sources, plus help using FirstFunds."
+        title="Your AI financial advisor"
+        subtitle="Ask in plain English. Answers use your own numbers and cite IRS and CFPB sources."
       />
-      {!IS_STATIC && <Link href="/agents" className="mb-6 flex items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand-soft/60 p-4 hover:bg-brand-soft">
-        <span className="text-sm">
-          <b>New: Deep mode.</b> Text FinPilot over iMessage and watch a team of specialist agents check your return, with verification before every answer.
-        </span>
-        <span className="shrink-0 text-sm font-semibold text-brand">Agent Console →</span>
-      </Link>}
+
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <TutorChat />
         <div className="space-y-4">
+          {!IS_STATIC && (
+            <Link href="/agents" className="surface lift block rounded-2xl border border-brand/30 p-4 hover:border-brand/60">
+              <div className="flex items-center gap-2 text-sm font-semibold"><Bot size={16} className="text-brand" /> Deep mode</div>
+              <p className="mt-1 text-sm text-ink-2">Watch a team of specialist agents check a return, with verification before every answer.</p>
+              <span className="mt-2 inline-block text-sm font-semibold text-brand">Open Agent Console →</span>
+            </Link>
+          )}
           <div className="text-xs font-semibold tracking-wide text-ink-3 uppercase">What FinPilot can see</div>
           <Card className="p-4">
             <div className="flex items-center gap-2 text-sm font-semibold">

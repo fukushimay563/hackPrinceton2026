@@ -52,7 +52,7 @@ export function QuestionCard({
       key={value}
       onClick={onClick}
       aria-pressed={selected}
-      className={cn(big, selected ? "border-brand bg-brand-soft text-brand-2" : "border-line bg-white text-ink hover:border-ink-3")}
+      className={cn(big, selected ? "border-brand bg-brand-soft text-brand-2" : "border-line bg-card text-ink hover:border-ink-3")}
     >
       {label}
     </button>
@@ -103,7 +103,7 @@ export function QuestionCard({
             <button
               disabled={!multi.length}
               onClick={() => onAnswer(multi.includes(NOT_SURE) ? NOT_SURE : multi)}
-              className="mt-2 w-full min-h-14 rounded-2xl bg-ink text-base font-semibold text-white disabled:opacity-40"
+              className="mt-2 w-full min-h-14 rounded-2xl bg-ink text-base font-semibold text-paper disabled:opacity-40"
             >
               Continue
             </button>
@@ -114,7 +114,7 @@ export function QuestionCard({
           <>
             <label className="block">
               <span className="text-sm font-medium text-ink-2">{q.amountLabel}</span>
-              <div className="mt-1.5 flex items-center rounded-2xl border-2 border-line bg-white px-4 focus-within:border-brand">
+              <div className="mt-1.5 flex items-center rounded-2xl border-2 border-line bg-card px-4 focus-within:border-brand">
                 <span className="text-lg text-ink-3">$</span>
                 <input
                   type="number"
@@ -130,7 +130,7 @@ export function QuestionCard({
             <button
               disabled={amount === "" || Number(amount) < 0}
               onClick={() => onAnswer(Math.round(Number(amount) * 100) / 100)}
-              className="w-full min-h-14 rounded-2xl bg-ink text-base font-semibold text-white disabled:opacity-40"
+              className="w-full min-h-14 rounded-2xl bg-ink text-base font-semibold text-paper disabled:opacity-40"
             >
               Use this amount
             </button>

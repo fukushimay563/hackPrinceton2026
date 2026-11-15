@@ -32,6 +32,9 @@ export function DocumentsStep({
   const fileRef = useRef<HTMLInputElement>(null);
   const [manual, setManual] = useState<null | { note?: string }>(null);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
+  const [reading, setReading] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const ACCEPT = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
   const docs = res.profile.documents;
   const docsReady = res.profile.answers["basics.docsReady"]?.value;
   const counted = docs.filter((d) => !d.excluded);
@@ -39,10 +42,19 @@ export function DocumentsStep({
   async function onFile(file: File) {
     setUploadErr(null);
     if (fileRef.current) fileRef.current.value = "";
+    if (!ACCEPT.includes(file.type)) {
+      setUploadErr(`“${file.name.slice(0, 40)}” isn't a supported file. Use a photo (PNG, JPG, WebP) or a PDF of your W-2.`);
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setUploadErr("That file is over 8 MB. Try a smaller photo or a PDF.");
+      return;
+    }
     if (IS_STATIC) {
       setManual({ note: `We can't read photos in this preview, so type the numbers from “${file.name.slice(0, 40)}”. It takes about 30 seconds.` });
       return;
     }
+    setReading(file.name);
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -69,6 +81,8 @@ export function DocumentsStep({
     } catch (e) {
       setUploadErr(e instanceof Error ? e.message : "We couldn't read that file.");
       setManual({});
+    } finally {
+      setReading(null);
     }
   }
 
@@ -86,12 +100,36 @@ export function DocumentsStep({
       <h2 className="text-2xl leading-tight font-semibold tracking-tight sm:text-[28px]">Add your tax documents</h2>
       <p className="mt-2 text-ink-2">Your W-2 from each job. We&apos;ll read the numbers so you don&apos;t have to type them.</p>
 
-      <button
-        onClick={() => fileRef.current?.click()}
-        className="mt-6 flex w-full min-h-20 items-center justify-center gap-3 rounded-2xl bg-ink px-5 text-lg font-semibold text-white hover:bg-ink-2"
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const f = e.dataTransfer.files?.[0];
+          if (f) onFile(f);
+        }}
+        className={cn("mt-6 rounded-2xl border-2 border-dashed p-2 transition-colors", dragOver ? "border-brand bg-brand-soft" : "border-transparent")}
       >
-        <Camera size={22} /> Upload a W-2
-      </button>
+        {reading ? (
+          <div className="flex min-h-20 w-full flex-col justify-center gap-2 rounded-2xl border border-line bg-card px-5" role="status" aria-live="polite">
+            <div className="flex items-center gap-2 text-sm font-semibold"><FileText size={16} className="text-brand" /> Reading “{reading.slice(0, 40)}”…</div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-line"><div className="skeleton h-1.5 w-full" /></div>
+            <div className="text-xs text-ink-3">Finding wages, withholding and employer details. You&apos;ll confirm every number next.</div>
+          </div>
+        ) : (
+          <button
+            onClick={() => fileRef.current?.click()}
+            className="flex w-full min-h-20 flex-col items-center justify-center gap-1 rounded-2xl bg-ink px-5 py-3 text-paper transition-transform hover:bg-ink-2 active:scale-[0.99]"
+          >
+            <span className="flex items-center gap-3 text-lg font-semibold"><Camera size={22} /> Upload a W-2</span>
+            <span className="text-xs text-paper/70">or drag and drop a photo or PDF here</span>
+          </button>
+        )}
+      </div>
       <input
         ref={fileRef}
         type="file"
@@ -101,11 +139,11 @@ export function DocumentsStep({
       />
       <button
         onClick={() => setManual({})}
-        className="mt-3 flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl border-2 border-line bg-white text-base font-semibold hover:border-ink-3"
+        className="mt-3 flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl border-2 border-line bg-card text-base font-semibold hover:border-ink-3"
       >
         <Keyboard size={18} /> Type it in instead
       </button>
-      {uploadErr && <p className="mt-3 rounded-xl bg-warn-soft px-3 py-2 text-sm text-ink">{uploadErr}</p>}
+      {uploadErr && <p role="alert" className="mt-3 rounded-xl border border-warn/30 bg-warn-soft px-3 py-2 text-sm text-ink">{uploadErr}</p>}
 
       {manual && <ManualEntry note={manual.note} onCancel={() => setManual(null)} onSave={(doc) => { setManual(null); send({ type: "addDocument", doc }, "Checking your documents…"); }} />}
 
@@ -114,7 +152,7 @@ export function DocumentsStep({
           {docs.map((d) => {
             const msg = exclusionMessage(d);
             return (
-              <li key={d.id} className={cn("rounded-2xl border p-4", d.excluded ? "border-dashed border-line bg-paper" : "border-line bg-white")}>
+              <li key={d.id} className={cn("rounded-2xl border p-4", d.excluded ? "border-dashed border-line bg-paper" : "border-line bg-card")}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 font-semibold">
@@ -131,7 +169,7 @@ export function DocumentsStep({
                       </button>
                     )}
                   </div>
-                  <button onClick={() => send({ type: "removeDocument", docId: d.id })} aria-label={`Remove ${d.label}`} className="rounded-lg p-2 text-ink-3 hover:bg-black/5 hover:text-debt">
+                  <button onClick={() => send({ type: "removeDocument", docId: d.id })} aria-label={`Remove ${d.label}`} className="rounded-lg p-2 text-ink-3 hover:bg-ink/5 hover:text-debt">
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -148,7 +186,7 @@ export function DocumentsStep({
             <button
               key={s.key}
               onClick={() => send({ type: "addDocument", doc: s.build() }, "Checking your documents…")}
-              className="rounded-xl border border-line bg-white p-3 text-left hover:border-brand"
+              className="rounded-xl border border-line bg-card p-3 text-left hover:border-brand"
             >
               <div className="flex items-center gap-1 text-sm font-semibold">
                 <Plus size={14} className="shrink-0 text-brand" /> <span className="truncate">{s.title}</span>
@@ -162,7 +200,7 @@ export function DocumentsStep({
       <button
         disabled={docs.length === 0}
         onClick={() => send({ type: "uploadsDone", done: true }, "Checking your documents…")}
-        className="sticky bottom-4 mt-6 w-full min-h-14 rounded-2xl bg-brand text-base font-semibold text-white shadow-lg hover:bg-brand-2 disabled:opacity-40 disabled:shadow-none"
+        className="sticky bottom-4 mt-6 w-full min-h-14 rounded-2xl bg-brand text-base font-semibold text-on-brand shadow-lg hover:bg-brand-2 disabled:opacity-40 disabled:shadow-none"
       >
         I&apos;ve added everything
       </button>
@@ -190,7 +228,7 @@ function ManualEntry({ note, onSave, onCancel }: { note?: string; onSave: (d: Ta
         });
         onSave({ ...doc, confirmed: true }); // typed by the user: already confirmed
       }}
-      className="mt-4 space-y-3 rounded-2xl border border-line bg-white p-4"
+      className="mt-4 space-y-3 rounded-2xl border border-line bg-card p-4"
     >
       {note && <p className="rounded-xl bg-info-soft px-3 py-2 text-sm">{note}</p>}
       <Field label="Employer name (box c)">
@@ -212,7 +250,7 @@ function ManualEntry({ note, onSave, onCancel }: { note?: string; onSave: (d: Ta
         <button type="button" onClick={onCancel} className="min-h-12 flex-1 rounded-xl border border-line font-semibold">
           Cancel
         </button>
-        <button type="submit" disabled={!valid} className="min-h-12 flex-1 rounded-xl bg-ink font-semibold text-white disabled:opacity-40">
+        <button type="submit" disabled={!valid} className="min-h-12 flex-1 rounded-xl bg-ink font-semibold text-paper disabled:opacity-40">
           Add W-2
         </button>
       </div>
@@ -257,7 +295,7 @@ export function ConfirmDoc({
         Document {index} of {total}
       </div>
       <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-[28px]">{doc.label}</h2>
-      <dl className="mt-5 divide-y divide-line rounded-2xl border border-line bg-white">
+      <dl className="mt-5 divide-y divide-line rounded-2xl border border-line bg-card">
         <Row k="From" v={doc.payer} />
         <Row k="Tax year" v={doc.taxYear ? String(doc.taxYear) : "Not found"} />
         {keys.map(([k, label]) =>
@@ -287,16 +325,16 @@ export function ConfirmDoc({
         {editing ? (
           <button
             onClick={() => onConfirm(Object.fromEntries(keys.map(([k]) => [k, vals[k] === "" ? null : Number(vals[k])])) as DocFields)}
-            className="w-full min-h-14 rounded-2xl bg-ink text-base font-semibold text-white"
+            className="w-full min-h-14 rounded-2xl bg-ink text-base font-semibold text-paper"
           >
             Save these numbers
           </button>
         ) : (
           <>
-            <button onClick={() => onConfirm()} className="w-full min-h-14 rounded-2xl bg-ink text-base font-semibold text-white">
+            <button onClick={() => onConfirm()} className="w-full min-h-14 rounded-2xl bg-ink text-base font-semibold text-paper">
               Yes, that&apos;s right
             </button>
-            <button onClick={() => setEditing(true)} className="w-full min-h-14 rounded-2xl border-2 border-line bg-white text-base font-semibold hover:border-ink-3">
+            <button onClick={() => setEditing(true)} className="w-full min-h-14 rounded-2xl border-2 border-line bg-card text-base font-semibold hover:border-ink-3">
               Fix a number
             </button>
           </>

@@ -131,7 +131,7 @@ export function FilingFlow() {
               <Num n={3} /> We only ask what your documents can&apos;t tell us
             </li>
           </ul>
-          <button onClick={() => setStarted(true)} className="mt-8 w-full min-h-14 rounded-2xl bg-ink text-lg font-semibold text-white hover:bg-ink-2">
+          <button onClick={() => setStarted(true)} className="mt-8 w-full min-h-14 rounded-2xl bg-ink text-lg font-semibold text-paper hover:bg-ink-2">
             Start
           </button>
           <p className="mt-4 flex items-center justify-center gap-2 text-sm text-ink-3">

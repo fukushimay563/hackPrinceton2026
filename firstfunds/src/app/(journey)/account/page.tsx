@@ -96,17 +96,17 @@ export default function AccountPage() {
             </div>
           </div>
           <div className="mt-6 space-y-3">
-            <Link href="/taxes" className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-ink font-semibold text-white">
+            <Link href="/taxes" className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-ink font-semibold text-paper">
               <Cloud size={18} /> Continue your taxes
             </Link>
-            <button onClick={signOut} className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl border-2 border-line bg-white font-semibold">
+            <button onClick={signOut} className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl border-2 border-line bg-card font-semibold">
               <LogOut size={18} /> Sign out
             </button>
             {confirmDelete ? (
               <div className="rounded-2xl border border-debt/30 bg-debt-soft p-4">
                 <p className="text-sm text-ink">Delete your saved answers and document numbers? This can&apos;t be undone.</p>
                 <div className="mt-3 flex gap-2">
-                  <button onClick={() => setConfirmDelete(false)} className="min-h-11 flex-1 rounded-xl border border-line bg-white font-semibold">
+                  <button onClick={() => setConfirmDelete(false)} className="min-h-11 flex-1 rounded-xl border border-line bg-card font-semibold">
                     Keep it
                   </button>
                   <button onClick={deleteData} disabled={busy} className="min-h-11 flex-1 rounded-xl bg-debt font-semibold text-white disabled:opacity-50">
@@ -128,7 +128,7 @@ export default function AccountPage() {
           <form onSubmit={sendLink} className="mt-6 space-y-3">
             <label className="block">
               <span className="text-sm font-medium text-ink-2">Email</span>
-              <div className="mt-1 flex items-center gap-2 rounded-2xl border-2 border-line bg-white px-4 focus-within:border-brand">
+              <div className="mt-1 flex items-center gap-2 rounded-2xl border-2 border-line bg-card px-4 focus-within:border-brand">
                 <Mail size={18} className="text-ink-3" />
                 <input
                   type="email"
@@ -141,11 +141,11 @@ export default function AccountPage() {
                 />
               </div>
             </label>
-            <button type="submit" disabled={busy} className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl bg-ink font-semibold text-white disabled:opacity-50">
+            <button type="submit" disabled={busy} className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl bg-ink font-semibold text-paper disabled:opacity-50">
               {busy ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />} Email me a sign-in link
             </button>
           </form>
-          <button onClick={guest} disabled={busy} className="mt-3 w-full min-h-14 rounded-2xl border-2 border-line bg-white font-semibold disabled:opacity-50">
+          <button onClick={guest} disabled={busy} className="mt-3 w-full min-h-14 rounded-2xl border-2 border-line bg-card font-semibold disabled:opacity-50">
             Continue as a guest
           </button>
           <p className="mt-4 flex items-start gap-2 text-xs text-ink-3">

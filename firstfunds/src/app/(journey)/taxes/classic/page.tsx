@@ -39,7 +39,7 @@ function NumberInput({ label, value, onChange, hint }: { label: ReactNode; value
   return (
     <label className="block">
       <span className="text-sm font-medium text-ink-2">{label}</span>
-      <div className="mt-1.5 flex items-center rounded-xl border border-line bg-white px-3 focus-within:border-brand">
+      <div className="mt-1.5 flex items-center rounded-xl border border-line bg-card px-3 focus-within:border-brand">
         <span className="text-ink-3">$</span>
         <input
           type="number"
@@ -61,7 +61,7 @@ function Check2({ checked, onChange, children }: { checked: boolean; onChange: (
     <label
       className={cn(
         "flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm transition-colors",
-        checked ? "border-brand bg-brand-soft/60" : "border-line bg-white hover:border-ink-3",
+        checked ? "border-brand bg-brand-soft/60" : "border-line bg-card hover:border-ink-3",
       )}
     >
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand" />
@@ -147,7 +147,7 @@ export default function TaxesPage() {
               aria-current={i === step ? "step" : undefined}
               className={cn(
                 "w-full min-w-24 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition-colors",
-                i === step ? "border-ink bg-ink text-white" : i < step ? "border-brand/30 bg-brand-soft text-brand-2" : "border-line bg-white text-ink-3",
+                i === step ? "border-ink bg-ink text-paper" : i < step ? "border-brand/30 bg-brand-soft text-brand-2" : "border-line bg-card text-ink-3",
               )}
             >
               <span className="flex items-center gap-1">
@@ -192,7 +192,7 @@ export default function TaxesPage() {
                 <button
                   onClick={() => fileRef.current?.click()}
                   disabled={uploading}
-                  className="rounded-xl border border-dashed border-ink-3/40 bg-white p-4 text-left text-sm hover:border-brand disabled:opacity-60"
+                  className="rounded-xl border border-dashed border-ink-3/40 bg-card p-4 text-left text-sm hover:border-brand disabled:opacity-60"
                 >
                   {uploading ? <Loader2 size={18} className="animate-spin text-brand" /> : <FileUp size={18} className="text-brand" />}
                   <div className="mt-2 font-semibold">{uploading ? "Reading…" : "Upload a W-2"}</div>
@@ -428,7 +428,7 @@ export default function TaxesPage() {
                   href="https://www.irs.gov/filing/irs-free-file-do-your-taxes-for-free"
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold hover:border-ink-3"
+                  className="inline-flex items-center gap-2 rounded-xl border border-line bg-card px-4 py-2.5 text-sm font-semibold hover:border-ink-3"
                 >
                   File free with IRS Free File <ExternalLink size={14} />
                 </a>
@@ -495,8 +495,8 @@ export default function TaxesPage() {
 
 function Mini({ label, value, tone, strong }: { label: string; value: string; tone?: "good"; strong?: boolean }) {
   return (
-    <div className={cn("rounded-xl p-4", strong ? "bg-ink text-white" : "bg-paper")}>
-      <div className={cn("text-xs", strong ? "text-white/70" : "text-ink-3")}>{label}</div>
+    <div className={cn("rounded-xl p-4", strong ? "bg-ink text-paper" : "bg-paper")}>
+      <div className={cn("text-xs", strong ? "text-paper/70" : "text-ink-3")}>{label}</div>
       <div className={cn("num mt-1 text-xl font-semibold", tone === "good" && "text-brand")}>{value}</div>
     </div>
   );

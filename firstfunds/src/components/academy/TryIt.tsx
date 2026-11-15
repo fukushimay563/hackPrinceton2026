@@ -15,7 +15,7 @@ const RATE_COLORS: Record<number, string> = { 0.1: "#9ec5f4", 0.12: "#6da7ec", 0
 
 export function TryIt({ kind }: { kind: TryItKind }) {
   return (
-    <div className="rounded-2xl border border-line bg-white p-5">
+    <div className="rounded-2xl border border-line bg-card p-5">
       <div className="mb-4 text-xs font-semibold tracking-widest text-brand uppercase">Try it</div>
       {kind === "w2" && <W2Explorer />}
       {kind === "fica" && <Fica />}
@@ -49,7 +49,7 @@ function W2Explorer() {
             key={x.n}
             onClick={() => setSel(x.n)}
             aria-pressed={sel === x.n}
-            className={cn("border-b border-r border-ink/15 p-2.5 text-left transition-colors", sel === x.n ? "bg-mint/40" : "hover:bg-black/5")}
+            className={cn("border-b border-r border-ink/15 p-2.5 text-left transition-colors", sel === x.n ? "bg-mint/40" : "hover:bg-ink/5")}
           >
             <div className="text-[11px] text-ink-3">
               <b className="text-ink">{x.n}</b> {x.label}
@@ -205,8 +205,8 @@ function SelfEmployment() {
 
 function Box({ label, v, strong }: { label: string; v: string; strong?: boolean }) {
   return (
-    <div className={cn("rounded-xl p-3", strong ? "bg-ink text-white" : "bg-paper")}>
-      <div className={cn("text-[11px] leading-tight", strong ? "text-white/70" : "text-ink-3")}>{label}</div>
+    <div className={cn("rounded-xl p-3", strong ? "bg-ink text-paper" : "bg-paper")}>
+      <div className={cn("text-[11px] leading-tight", strong ? "text-paper/70" : "text-ink-3")}>{label}</div>
       <div className="num mt-1 font-semibold">{v}</div>
     </div>
   );
