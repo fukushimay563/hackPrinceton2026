@@ -2,11 +2,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, BadgeCheck, FileUp, GraduationCap, LineChart, Lock, MessageCircle, Sparkles, FileText } from "lucide-react";
+import { ArrowRight, FileText, FileUp, GraduationCap, LineChart, Lock, MessageCircle, Sparkles } from "lucide-react";
 import { Logo } from "@/components/AppShell";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { Card } from "@/components/ui";
 import { useApp } from "@/lib/store";
+import { AnimatedSection, StaggerContainer, StaggerItem } from "@/components/motion";
 import { computeTax } from "@/lib/finance/tax2025";
 import { computePaycheck } from "@/lib/finance/paycheck";
 import { MAYA_PAYCHECK, MAYA_TAX } from "@/lib/demo/maya";
@@ -16,7 +16,13 @@ import { usd } from "@/lib/format";
 const mayaPay = computePaycheck(MAYA_PAYCHECK);
 const mayaTax = computeTax(MAYA_TAX);
 
-const rise = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
+// Product facts only (no simulated "live" counters).
+const FACTS = [
+  { label: "Specialist agents", value: "6" },
+  { label: "Tax year covered", value: "2025 IRS figures" },
+  { label: "Academy lessons", value: String(ALL_LESSONS.length) },
+  { label: "SSNs or account numbers needed", value: "0" },
+];
 
 export default function Home() {
   const router = useRouter();
@@ -27,148 +33,152 @@ export default function Home() {
     router.push("/advisor");
   };
 
-  const actions = [
-    {
-      icon: MessageCircle,
-      title: "Ask a question",
-      body: "Get a plain-English answer about taxes or money, with sources. Nothing to upload.",
-      onClick: () => router.push("/finpilot"),
-      primary: true,
-    },
-    {
-      icon: FileUp,
-      title: "Upload a tax document",
-      body: "Add your W-2 and get a reviewable 2025 estimate. We only ask what it can't tell us.",
-      onClick: () => router.push("/taxes"),
-    },
-    {
-      icon: Sparkles,
-      title: "Explore with demo data",
-      body: "See everything with Maya, a sample 20-year-old. No account, no personal info.",
-      onClick: startDemo,
-    },
-  ];
-
   return (
     <div className="min-h-screen">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
-        <Logo />
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <Link href="/finpilot" className="rounded-full border border-line bg-card px-3.5 py-2 text-sm font-semibold text-ink-2 hover:text-ink">
-            Open the advisor
-          </Link>
+      <header className="glass sticky top-0 z-20 border-b border-line">
+        <div className="mx-auto flex max-w-[1200px] items-center justify-between px-5 py-3">
+          <Logo />
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Link href="/finpilot" className="hidden min-h-9 items-center rounded-md px-3 text-sm text-ink transition-colors duration-300 hover:bg-sunken sm:inline-flex">
+              Open the advisor
+            </Link>
+            <button type="button" onClick={startDemo} className="inline-flex min-h-9 items-center rounded-md bg-accent px-4 text-sm text-on-accent transition-colors duration-300 hover:bg-[#d6e41c]">
+              See the demo
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4">
+      <main>
         <motion.section
-          initial="hidden"
-          animate="show"
-          transition={{ staggerChildren: 0.06 }}
-          className="grid items-center gap-10 pt-8 pb-12 lg:grid-cols-[1.15fr_1fr] lg:pt-14"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
+          className="mx-auto grid max-w-[1200px] items-start gap-12 px-5 pt-16 pb-20 lg:grid-cols-[1.1fr_1fr] lg:pt-24"
         >
           <div>
-            <motion.div variants={rise} className="inline-flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1 text-xs font-semibold text-ink-2">
-              <BadgeCheck size={14} className="text-brand" /> AI financial &amp; tax advisor for first-timers
-            </motion.div>
-            <motion.h1 variants={rise} className="mt-5 text-4xl leading-[1.04] font-semibold tracking-tight text-balance text-ink sm:text-6xl">
-              Your finances, <span className="text-brand">finally making sense.</span>
-            </motion.h1>
-            <motion.p variants={rise} className="mt-5 max-w-xl text-lg text-ink-2">
+            <div className="text-[11px] tracking-[0.05em] text-ink-3 uppercase">AI financial &amp; tax advisor · for first-timers</div>
+            <h1 className="mt-5 text-[44px] leading-[1.0] text-ink sm:text-[64px]">Your finances, finally making sense.</h1>
+            <p className="mt-6 max-w-xl text-[20px] leading-[1.3] text-ink-3">
               Get clarity on your taxes, understand your finances, and find your next best move with an AI-powered financial advisor.
-            </motion.p>
+            </p>
 
-            <motion.div variants={rise} className="mt-8 grid gap-3 sm:grid-cols-3">
-              {actions.map((a) => (
-                <button
-                  key={a.title}
-                  type="button"
-                  onClick={a.onClick}
-                  className={`group lift flex flex-col rounded-2xl border p-4 text-left ${a.primary ? "border-ink bg-ink text-paper dark:border-brand/40 dark:bg-brand-soft dark:text-ink" : "surface border-line text-ink hover:border-brand/50"}`}
-                >
-                  <span className={`grid h-9 w-9 place-items-center rounded-xl ${a.primary ? "bg-paper/10 text-mint dark:bg-brand dark:text-on-brand" : "bg-brand-soft text-brand"}`}>
-                    <a.icon size={18} />
-                  </span>
-                  <span className="mt-3 flex items-center gap-1 font-semibold">
-                    {a.title} <ArrowRight size={14} className="transition-transform duration-150 group-hover:translate-x-0.5" />
-                  </span>
-                  <span className={`mt-1 text-sm ${a.primary ? "text-paper/75 dark:text-ink-2" : "text-ink-2"}`}>{a.body}</span>
-                </button>
-              ))}
-            </motion.div>
+            <StaggerContainer delay={0.25} stagger={0.07} className="mt-10 grid gap-2 sm:grid-cols-3">
+              <StaggerItem className="h-full"><ActionCard primary icon={MessageCircle} title="Ask a question" body="Plain-English answers with sources. Nothing to upload." onClick={() => router.push("/finpilot")} /></StaggerItem>
+              <StaggerItem className="h-full"><ActionCard icon={FileUp} title="Upload a tax document" body="Add a W-2 for a reviewable 2025 estimate." onClick={() => router.push("/taxes")} /></StaggerItem>
+              <StaggerItem className="h-full"><ActionCard icon={Sparkles} title="Explore with demo data" body="Maya, a sample 20-year-old. No account needed." onClick={startDemo} /></StaggerItem>
+            </StaggerContainer>
 
-            <motion.p variants={rise} className="mt-5 flex items-start gap-2 text-sm text-ink-3">
-              <Lock size={15} className="mt-0.5 shrink-0" />
-              No sign-up. We ask for information only when a task needs it, and tell you why. Nothing is saved after you close the tab unless you sign in.
-            </motion.p>
+            <p className="mt-6 flex items-start gap-2 text-sm text-ink-3">
+              <Lock size={14} className="mt-0.5 shrink-0" />
+              No sign-up. We ask for information only when a task needs it, and say why.
+            </p>
           </div>
 
-          <motion.div variants={rise}>
-            <Card className="relative overflow-hidden">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="grid h-10 w-10 place-items-center rounded-full bg-brand-soft font-bold text-brand-2">M</div>
-                  <div>
-                    <div className="font-semibold">Maya, 20</div>
-                    <div className="text-sm text-ink-3">First job · first card · first return</div>
-                  </div>
+          {/* Product frame */}
+          <div className="rounded-2xl border border-line bg-card">
+            <div className="flex items-center gap-1.5 border-b border-line px-4 py-3" aria-hidden>
+              <span className="h-2.5 w-2.5 rounded-full bg-smoke" />
+              <span className="h-2.5 w-2.5 rounded-full bg-smoke" />
+              <span className="h-2.5 w-2.5 rounded-full bg-smoke" />
+              <span className="ml-3 text-xs text-ink-3">firstfunds · overview</span>
+            </div>
+            <div className="p-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="text-[11px] tracking-[0.05em] text-ink-3 uppercase">Maya, 20 · first job</div>
+                  <div className="mt-1 text-[24px] leading-[1.17] text-ink">2025 return estimate</div>
                 </div>
-                <span className="rounded-full bg-warn-soft px-2.5 py-0.5 text-xs font-semibold text-warn">Demo data</span>
+                <span className="rounded-md border border-line px-2 py-0.5 text-xs text-ink-3">Demo data</span>
               </div>
-              <div className="mt-5 space-y-3">
-                <PreviewRow label="Take-home per paycheck" value={usd(mayaPay.net, true)} sub={`of ${usd(mayaPay.gross)} gross`} />
-                <PreviewRow label="2025 federal tax estimate" value={usd(mayaTax.tax)} sub="calculated from the IRS tables" />
-                <PreviewRow label="Expected refund" value={usd(mayaTax.refund)} sub="withheld minus estimated tax" tone="good" />
+              <dl className="mt-6 divide-y divide-line border-y border-line">
+                <Row label="Take-home per paycheck" value={usd(mayaPay.net, true)} />
+                <Row label="Federal tax (IRS tax table)" value={usd(mayaTax.tax)} />
+                <Row label="Expected refund" value={usd(mayaTax.refund)} highlight />
+              </dl>
+              <div className="mt-5 rounded-xl bg-sunken p-4 text-sm text-ink-2">
+                Every number comes from deterministic tax math, and a verification step re-checks it before you see it.
               </div>
-              <div className="mt-5 rounded-xl border border-line bg-sunken p-3 text-sm text-ink-2">
-                <span className="font-semibold text-ink">How estimates are checked:</span> numbers come from deterministic tax math, then a verification step re-checks them before you see them.
-              </div>
-            </Card>
-          </motion.div>
+              <button type="button" onClick={startDemo} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-5 text-sm text-on-accent transition-colors duration-300 hover:bg-[#d6e41c]">
+                Open Maya&apos;s overview <ArrowRight size={15} />
+              </button>
+            </div>
+          </div>
         </motion.section>
 
-        <section className="pb-16">
-          <h2 className="text-sm font-semibold tracking-widest text-ink-3 uppercase">Everything in one place</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Inverted facts band */}
+        <AnimatedSection className="bg-obsidian text-paper">
+          <dl className="mx-auto grid max-w-[1200px] grid-cols-2 gap-6 px-5 py-10 sm:grid-cols-4">
+            {FACTS.map((f) => (
+              <div key={f.label}>
+                <dt className="text-[10px] tracking-[0.018em] text-paper/60 uppercase">{f.label}</dt>
+                <dd className="num mt-1 text-[24px] leading-[1.17]">{f.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </AnimatedSection>
+
+        <AnimatedSection className="mx-auto max-w-[1200px] px-5 py-20">
+          <h2 className="max-w-2xl text-[28px] leading-[1.14] text-ink sm:text-[40px] sm:leading-[1.05]">Everything a first-time filer needs, in one place.</h2>
+          <StaggerContainer inView delay={0.1} className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               { href: "/advisor", icon: LineChart, title: "Financial Advisor", body: "Paycheck, budget and credit card, with next steps.", demo: true },
               { href: "/taxes", icon: FileText, title: "Tax Assistant", body: "A reviewable 2025 estimate with a source for every number." },
               { href: "/academy", icon: GraduationCap, title: "Academy", body: `${ALL_LESSONS.length} short lessons on W-2s, withholding and filing.` },
               { href: "/finpilot", icon: MessageCircle, title: "FinPilot", body: "Ask anything. It explains your actual math." },
             ].map((f) => (
+              <StaggerItem key={f.href} className="h-full">
               <button
-                key={f.href}
                 type="button"
                 onClick={() => (f.demo ? startDemo() : router.push(f.href))}
-                className="surface lift group rounded-2xl border border-line p-5 text-left hover:border-brand/40"
+                className="lift group flex h-full w-full flex-col rounded-2xl border border-line bg-card p-6 text-left"
               >
-                <f.icon size={20} className="text-brand" />
-                <div className="mt-3 font-semibold">{f.title}</div>
-                <p className="mt-1 text-sm text-ink-2">{f.body}</p>
+                <f.icon size={20} className="text-ink" />
+                <div className="mt-8 text-[20px] leading-[1.3] text-ink">{f.title}</div>
+                <p className="mt-1 text-sm text-ink-3">{f.body}</p>
+                <span className="mt-6 inline-flex items-center gap-1 text-sm text-ink underline-offset-4 group-hover:underline">
+                  Open <ArrowRight size={14} />
+                </span>
               </button>
+              </StaggerItem>
             ))}
-          </div>
-        </section>
+          </StaggerContainer>
+        </AnimatedSection>
       </main>
-      <footer className="mx-auto max-w-6xl px-4 pb-10 text-xs text-ink-3">
-        Educational guidance only. FirstFunds isn&apos;t a licensed financial advisor or tax preparer and doesn&apos;t file tax returns.{" "}
-        <Link href="/methodology" className="underline">
-          How we calculate
-        </Link>
+      <footer className="border-t border-line">
+        <div className="mx-auto max-w-[1200px] px-5 py-8 text-xs text-ink-3">
+          Educational guidance only. FirstFunds isn&apos;t a licensed financial advisor or tax preparer and doesn&apos;t file tax returns.{" "}
+          <Link href="/methodology" className="underline">
+            How we calculate
+          </Link>
+        </div>
       </footer>
     </div>
   );
 }
 
-function PreviewRow({ label, value, sub, tone }: { label: string; value: string; sub: string; tone?: "good" }) {
+function ActionCard({ icon: Icon, title, body, onClick, primary }: { icon: typeof FileUp; title: string; body: string; onClick: () => void; primary?: boolean }) {
   return (
-    <div className="flex items-end justify-between gap-3 border-b border-line pb-3 last:border-0">
-      <div>
-        <div className="text-sm text-ink-2">{label}</div>
-        <div className="text-xs text-ink-3">{sub}</div>
-      </div>
-      <div className={`num text-xl font-semibold ${tone === "good" ? "text-brand" : "text-ink"}`}>{value}</div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`lift group flex h-full w-full flex-col rounded-xl border p-4 text-left ${primary ? "border-accent bg-accent text-on-accent hover:bg-[#d6e41c]" : "border-line bg-card text-ink hover:border-ink-3"}`}
+    >
+      <Icon size={18} />
+      <span className="mt-6 flex items-center gap-1 text-[16px]">
+        {title} <ArrowRight size={14} />
+      </span>
+      <span className={`mt-1 text-[13px] leading-snug ${primary ? "text-on-accent/75" : "text-ink-3"}`}>{body}</span>
+    </button>
+  );
+}
+
+function Row({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between py-3">
+      <dt className="text-sm text-ink-3">{label}</dt>
+      <dd className={`num text-[20px] text-ink ${highlight ? "bg-accent px-1.5 text-on-accent" : ""}`}>{value}</dd>
     </div>
   );
 }

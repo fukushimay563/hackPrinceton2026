@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
+import "@fontsource-variable/inter";
 import { usePathname } from "./shims/navigation";
 import Home from "@/app/page";
 import { AppShell } from "@/components/AppShell";

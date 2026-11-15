@@ -2,8 +2,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDown, ArrowRight, ArrowUp, BookOpen, ExternalLink, FileUp, Paperclip, RotateCcw, Sparkles } from "lucide-react";
+import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-motion";
+import { useRouter } from "next/navigation";
+import { messageVariants, SPRING, staggerParent, fadeUp } from "@/lib/motion";
+import { ArrowDown, ArrowRight, ArrowUp, BookOpen, Calculator, ExternalLink, FileUp, Loader2, MessageCircle, Paperclip, RotateCcw, Sparkles } from "lucide-react";
 import { useApp, type ChatMessage } from "@/lib/store";
 import { askTutorQuestion } from "@/lib/tutor/ask";
 import { cn } from "./ui";
@@ -65,6 +67,9 @@ export function TutorChat({ compact = false }: { compact?: boolean }) {
   const [unseen, setUnseen] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const router = useRouter();
+  const reduce = useReducedMotion();
+  const welcome = !compact && chat.length === 0 && !loading;
 
   // Smart auto-scroll: follow new messages only if the reader is already at the bottom.
   useLayoutEffect(() => {
@@ -89,6 +94,10 @@ export function TutorChat({ compact = false }: { compact?: boolean }) {
     if (atBottom) setUnseen(false);
   }
 
+  function focusInput() {
+    document.getElementById("tutor-input")?.focus();
+  }
+
   function jumpDown() {
     const el = scroller.current;
     el?.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
@@ -105,14 +114,117 @@ export function TutorChat({ compact = false }: { compact?: boolean }) {
 
   const hasTax = tax.wages > 0;
 
+  function renderComposer(hero: boolean) {
+    return (
+      <motion.form
+        layoutId="ff-composer"
+        transition={SPRING.soft}
+        onSubmit={(e) => {
+          e.preventDefault();
+          ask(input);
+        }}
+        className={hero ? "w-full" : "border-t border-line p-3"}
+      >
+        <div className="flex items-end gap-1.5 rounded-xl border border-line bg-card p-1.5 transition-colors focus-within:border-brand">
+          <Link href="/taxes" aria-label="Upload a tax document" title="Upload a tax document" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink-3 hover:bg-ink/5 hover:text-ink">
+            <Paperclip size={16} />
+          </Link>
+          <label htmlFor="tutor-input" className="sr-only">
+            Ask FinPilot
+          </label>
+          <textarea
+            ref={inputRef}
+            id="tutor-input"
+            rows={1}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                ask(input);
+              }
+            }}
+            placeholder="Ask about taxes, your paycheck or your budget…"
+            className="max-h-32 min-h-9 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none"
+          />
+          {chat.length > 0 && (
+            <button type="button" onClick={clearChat} aria-label="Clear chat" className="grid h-9 w-9 place-items-center rounded-lg text-ink-3 hover:bg-ink/5">
+              <RotateCcw size={16} />
+            </button>
+          )}
+          <motion.button
+            type="submit"
+            disabled={!input.trim() || loading}
+            aria-label={loading ? "Waiting for the answer" : "Send"}
+            whileTap={{ scale: 0.9 }}
+            className="grid h-9 w-9 place-items-center rounded-md bg-accent text-on-accent transition-colors duration-200 disabled:opacity-40"
+          >
+            <AnimatePresence mode="popLayout" initial={false}>
+              {loading ? (
+                <motion.span key="busy" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }}>
+                  <Loader2 size={16} className="animate-spin" />
+                </motion.span>
+              ) : (
+                <motion.span key="send" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
+                  <ArrowUp size={16} />
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.button>
+        </div>
+        <p className="mt-1.5 text-[11px] text-ink-3">Education, not financial or tax advice. Don&apos;t share SSNs or account numbers.</p>
+      </motion.form>
+    );
+  }
+
+
   return (
-    <div className={cn("relative flex min-h-0 flex-1 flex-col", !compact && "surface h-[calc(100dvh-17rem)] min-h-[420px] rounded-2xl border border-line md:h-[72vh] md:min-h-[480px]")}>
+    <LayoutGroup>
+    <div className={cn("relative flex min-h-0 flex-1 flex-col", !compact && cn("surface rounded-2xl border border-line md:h-[72vh] md:min-h-[480px]", welcome ? "min-h-[420px]" : "h-[calc(100dvh-17rem)] min-h-[420px]"))}>
+      {welcome ? (
+        <motion.div
+          key="welcome"
+          className="flex min-h-0 flex-1 flex-col justify-start overflow-y-auto p-5 sm:p-10 md:justify-center"
+          variants={staggerParent(0.07, 0.05)}
+          initial={reduce ? false : "hidden"}
+          animate="show"
+        >
+          <motion.div variants={fadeUp} className="text-[11px] tracking-[0.05em] text-ink-3 uppercase">FinPilot · AI financial advisor</motion.div>
+          <motion.h2 variants={fadeUp} className="mt-3 max-w-xl text-[32px] leading-[1.05] text-ink sm:text-[44px]">Your finances, finally making sense.</motion.h2>
+          <motion.p variants={fadeUp} className="mt-3 max-w-xl text-ink-3">
+            Understand your taxes, explore your financial options, and get answers with an AI advisor built around you.
+          </motion.p>
+          <motion.div variants={fadeUp} className="mt-7 max-w-2xl">{renderComposer(true)}</motion.div>
+          <motion.div variants={staggerParent(0.06)} className="mt-4 grid max-w-2xl gap-2 sm:grid-cols-3">
+            {[
+              { label: "Estimate my taxes", body: "Uses your W-2 numbers, or tells you what's missing", icon: Calculator, run: () => ask("Can you estimate my taxes?") },
+              { label: "Analyze a document", body: "Upload a W-2 and confirm what we read", icon: FileUp, run: () => router.push("/taxes") },
+              { label: "Ask a financial question", body: "Anything about money, credit or taxes", icon: MessageCircle, run: focusInput },
+            ].map((a) => (
+              <motion.button
+                key={a.label}
+                type="button"
+                variants={fadeUp}
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={a.run}
+                className="flex flex-col rounded-xl border border-line bg-card p-3 text-left transition-colors duration-200 hover:border-ink-3 sm:p-3.5"
+              >
+                <a.icon size={17} className="text-ink" />
+                <span className="mt-2 text-[15px] text-ink sm:mt-3">{a.label}</span>
+                <span className="mt-0.5 text-xs text-ink-3">{a.body}</span>
+              </motion.button>
+            ))}
+          </motion.div>
+          <motion.p variants={fadeUp} className="mt-5 text-xs text-ink-3">No account needed. Never share an SSN or account number.</motion.p>
+        </motion.div>
+      ) : (
       <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5" aria-live="polite" aria-busy={loading}>
         {/* Welcome */}
         <div className="flex gap-3">
           <Avatar />
           <div className="max-w-[92%]">
-            <div className="rounded-2xl rounded-tl-md border border-line bg-sunken px-4 py-3 text-sm leading-relaxed text-ink">
+            <div className="rounded-2xl rounded-tl-md border border-line bg-card px-4 py-3 text-sm leading-relaxed text-ink">
               Welcome! I can help you understand your taxes, review financial documents, and explore your financial options. What would you like to work on today?
             </div>
             {chat.length === 0 && (
@@ -123,7 +235,7 @@ export function TutorChat({ compact = false }: { compact?: boolean }) {
                     variants={{ hidden: { opacity: 0, y: 6 }, show: { opacity: 1, y: 0 } }}
                     type="button"
                     onClick={() => ask(q)}
-                    className="lift rounded-xl border border-line bg-card px-3 py-2.5 text-left text-sm font-medium text-ink hover:border-brand/50"
+                    className="lift rounded-xl border border-line bg-card px-3 py-2.5 text-left text-sm text-ink"
                   >
                     {q}
                   </motion.button>
@@ -141,14 +253,14 @@ export function TutorChat({ compact = false }: { compact?: boolean }) {
         <AnimatePresence initial={false}>
           {chat.map((m, i) =>
             m.role === "user" ? (
-              <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-sm text-paper">
+              <motion.div key={i} variants={messageVariants} initial="hidden" animate="show" className="ml-auto origin-bottom-right max-w-[85%] rounded-2xl rounded-br-md bg-obsidian px-4 py-2.5 text-sm text-paper">
                 {m.content}
               </motion.div>
             ) : (
-              <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3">
+              <motion.div key={i} variants={messageVariants} initial="hidden" animate="show" className="flex origin-top-left gap-3">
                 <Avatar />
                 <div className="min-w-0 max-w-[92%] flex-1">
-                  <div className="rounded-2xl rounded-tl-md border border-line bg-sunken px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-ink">
+                  <div className="rounded-2xl rounded-tl-md border border-line bg-card px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-ink">
                     {renderWithCitations(m.content, m.sources)}
                   </div>
                   {m.mode === "offline" && <div className="mt-1 pl-1 text-[11px] text-ink-3">Answered offline from FirstFunds&apos; built-in guides.</div>}
@@ -181,7 +293,7 @@ export function TutorChat({ compact = false }: { compact?: boolean }) {
                   {nextSteps(chat[i - 1]?.content, hasTax).map((a) => (
                     <div key={a.label} className="mt-2">
                       {a.note && <p className="mb-1.5 pl-1 text-xs text-ink-2">{a.note}</p>}
-                      <Link href={a.href} className="inline-flex items-center gap-1.5 rounded-full border border-brand/40 bg-brand-soft px-3 py-1.5 text-xs font-semibold text-brand-2 transition-transform active:scale-95">
+                      <Link href={a.href} className="inline-flex items-center gap-1.5 rounded-md border border-brand/40 bg-brand-soft px-3 py-1.5 text-xs font-semibold text-brand-2 transition-transform">
                         <a.icon size={13} /> {a.label}
                       </Link>
                     </div>
@@ -195,10 +307,10 @@ export function TutorChat({ compact = false }: { compact?: boolean }) {
         {loading && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-3 text-sm text-ink-3" role="status">
             <Avatar />
-            <span className="flex items-center gap-2 rounded-2xl border border-line bg-sunken px-4 py-3">
+            <span className="flex items-center gap-2 rounded-2xl border border-line bg-card px-4 py-3">
               <span className="flex gap-1" aria-hidden>
                 {[0, 1, 2].map((d) => (
-                  <motion.span key={d} className="h-1.5 w-1.5 rounded-full bg-brand" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1, repeat: Infinity, delay: d * 0.15 }} />
+                  <motion.span key={d} className="h-1.5 w-1.5 rounded-full bg-ink" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1, repeat: Infinity, delay: d * 0.15 }} />
                 ))}
               </span>
               Checking your numbers and sources…
@@ -214,7 +326,7 @@ export function TutorChat({ compact = false }: { compact?: boolean }) {
           </div>
         )}
       </div>
-
+      )}
       <AnimatePresence>
         {unseen && !pinned && (
           <motion.button
@@ -223,65 +335,22 @@ export function TutorChat({ compact = false }: { compact?: boolean }) {
             exit={{ opacity: 0, y: 6 }}
             type="button"
             onClick={jumpDown}
-            className="absolute bottom-24 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-paper shadow-lg"
+            className="absolute bottom-24 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-md bg-obsidian px-3 py-1.5 text-xs font-semibold text-paper shadow-lg"
           >
             <ArrowDown size={13} /> New message
           </motion.button>
         )}
       </AnimatePresence>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          ask(input);
-        }}
-        className="border-t border-line p-3"
-      >
-        <div className="flex items-end gap-1.5 rounded-xl border border-line bg-card p-1.5 transition-colors focus-within:border-brand">
-          <Link href="/taxes" aria-label="Upload a tax document" title="Upload a tax document" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink-3 hover:bg-ink/5 hover:text-ink">
-            <Paperclip size={16} />
-          </Link>
-          <label htmlFor="tutor-input" className="sr-only">
-            Ask FinPilot
-          </label>
-          <textarea
-            ref={inputRef}
-            id="tutor-input"
-            rows={1}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                ask(input);
-              }
-            }}
-            placeholder="Ask about taxes, your paycheck or your budget…"
-            className="max-h-32 min-h-9 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none"
-          />
-          {chat.length > 0 && (
-            <button type="button" onClick={clearChat} aria-label="Clear chat" className="grid h-9 w-9 place-items-center rounded-lg text-ink-3 hover:bg-ink/5">
-              <RotateCcw size={16} />
-            </button>
-          )}
-          <button
-            type="submit"
-            disabled={!input.trim() || loading}
-            aria-label="Send"
-            className="grid h-9 w-9 place-items-center rounded-lg bg-ink text-paper transition-transform active:scale-90 disabled:opacity-40"
-          >
-            <ArrowUp size={16} />
-          </button>
-        </div>
-        <p className="mt-1.5 text-[11px] text-ink-3">Education, not financial or tax advice. Don&apos;t share SSNs or account numbers.</p>
-      </form>
+      {!welcome && renderComposer(false)}
     </div>
+    </LayoutGroup>
   );
 }
 
 function Avatar() {
   return (
-    <span aria-hidden className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-ink text-mint">
+    <span aria-hidden className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-obsidian text-accent">
       <Sparkles size={14} />
     </span>
   );

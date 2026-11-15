@@ -1,4 +1,5 @@
 "use client";
+import { AnimatePresence, motion } from "framer-motion";
 import { useRef, useState } from "react";
 import { Camera, FileText, Keyboard, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { exclusionMessage, SUPPORTED_TAX_YEAR } from "@/lib/minimizer/documents";
@@ -112,23 +113,33 @@ export function DocumentsStep({
           const f = e.dataTransfer.files?.[0];
           if (f) onFile(f);
         }}
-        className={cn("mt-6 rounded-2xl border-2 border-dashed p-2 transition-colors", dragOver ? "border-brand bg-brand-soft" : "border-transparent")}
+        className={cn("mt-6 rounded-2xl border-2 border-dashed p-2 transition-colors duration-200", dragOver ? "border-ink bg-accent/30" : "border-transparent")}
       >
+        <motion.div animate={{ scale: dragOver ? 1.015 : 1 }} transition={{ type: "spring", stiffness: 400, damping: 30 }}>
+        <AnimatePresence mode="wait" initial={false}>
         {reading ? (
-          <div className="flex min-h-20 w-full flex-col justify-center gap-2 rounded-2xl border border-line bg-card px-5" role="status" aria-live="polite">
+          <motion.div key="reading" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="flex min-h-20 w-full flex-col justify-center gap-2 rounded-2xl border border-line bg-card px-5" role="status" aria-live="polite">
             <div className="flex items-center gap-2 text-sm font-semibold"><FileText size={16} className="text-brand" /> Reading “{reading.slice(0, 40)}”…</div>
             <div className="h-1.5 overflow-hidden rounded-full bg-line"><div className="skeleton h-1.5 w-full" /></div>
             <div className="text-xs text-ink-3">Finding wages, withholding and employer details. You&apos;ll confirm every number next.</div>
-          </div>
+          </motion.div>
         ) : (
-          <button
+          <motion.button
+            key="pick"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            whileHover={{ y: -1 }}
+            whileTap={{ scale: 0.99 }}
             onClick={() => fileRef.current?.click()}
-            className="flex w-full min-h-20 flex-col items-center justify-center gap-1 rounded-2xl bg-ink px-5 py-3 text-paper transition-transform hover:bg-ink-2 active:scale-[0.99]"
+            className="flex w-full min-h-20 flex-col items-center justify-center gap-1 rounded-md bg-accent px-5 py-3 text-on-accent transition-transform hover:bg-[#d6e41c]"
           >
             <span className="flex items-center gap-3 text-lg font-semibold"><Camera size={22} /> Upload a W-2</span>
-            <span className="text-xs text-paper/70">or drag and drop a photo or PDF here</span>
-          </button>
+            <span className="text-xs opacity-70">{dragOver ? "Drop to upload" : "or drag and drop a photo or PDF here"}</span>
+          </motion.button>
         )}
+        </AnimatePresence>
+        </motion.div>
       </div>
       <input
         ref={fileRef}
@@ -143,16 +154,24 @@ export function DocumentsStep({
       >
         <Keyboard size={18} /> Type it in instead
       </button>
-      {uploadErr && <p role="alert" className="mt-3 rounded-xl border border-warn/30 bg-warn-soft px-3 py-2 text-sm text-ink">{uploadErr}</p>}
+      <AnimatePresence>
+        {uploadErr && (
+          <motion.p key={uploadErr} role="alert" initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: [6, -3, 0] }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} className="mt-3 rounded-xl border border-warn/30 bg-warn-soft px-3 py-2 text-sm text-ink">
+            {uploadErr}{" "}
+            <button type="button" onClick={() => fileRef.current?.click()} className="underline underline-offset-2">Try another file</button>
+          </motion.p>
+        )}
+      </AnimatePresence>
 
       {manual && <ManualEntry note={manual.note} onCancel={() => setManual(null)} onSave={(doc) => { setManual(null); send({ type: "addDocument", doc }, "Checking your documents…"); }} />}
 
       {docs.length > 0 && (
         <ul className="mt-6 space-y-2" aria-label="Your documents">
+          <AnimatePresence initial={false}>
           {docs.map((d) => {
             const msg = exclusionMessage(d);
             return (
-              <li key={d.id} className={cn("rounded-2xl border p-4", d.excluded ? "border-dashed border-line bg-paper" : "border-line bg-card")}>
+              <motion.li key={d.id} layout initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, x: -12 }} transition={{ type: "spring", stiffness: 300, damping: 30 }} className={cn("rounded-2xl border p-4", d.excluded ? "border-dashed border-line bg-paper" : "border-line bg-card")}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 font-semibold">
@@ -173,9 +192,10 @@ export function DocumentsStep({
                     <Trash2 size={16} />
                   </button>
                 </div>
-              </li>
+              </motion.li>
             );
           })}
+          </AnimatePresence>
         </ul>
       )}
 
@@ -200,7 +220,7 @@ export function DocumentsStep({
       <button
         disabled={docs.length === 0}
         onClick={() => send({ type: "uploadsDone", done: true }, "Checking your documents…")}
-        className="sticky bottom-4 mt-6 w-full min-h-14 rounded-2xl bg-brand text-base font-semibold text-on-brand shadow-lg hover:bg-brand-2 disabled:opacity-40 disabled:shadow-none"
+        className="sticky bottom-4 mt-6 w-full min-h-14 rounded-md bg-accent text-base font-semibold text-on-accent shadow-lg hover:bg-brand-2 disabled:opacity-40 disabled:shadow-none"
       >
         I&apos;ve added everything
       </button>
@@ -250,7 +270,7 @@ function ManualEntry({ note, onSave, onCancel }: { note?: string; onSave: (d: Ta
         <button type="button" onClick={onCancel} className="min-h-12 flex-1 rounded-xl border border-line font-semibold">
           Cancel
         </button>
-        <button type="submit" disabled={!valid} className="min-h-12 flex-1 rounded-xl bg-ink font-semibold text-paper disabled:opacity-40">
+        <button type="submit" disabled={!valid} className="min-h-12 flex-1 rounded-md bg-accent font-semibold text-on-accent disabled:opacity-40">
           Add W-2
         </button>
       </div>
@@ -325,13 +345,13 @@ export function ConfirmDoc({
         {editing ? (
           <button
             onClick={() => onConfirm(Object.fromEntries(keys.map(([k]) => [k, vals[k] === "" ? null : Number(vals[k])])) as DocFields)}
-            className="w-full min-h-14 rounded-2xl bg-ink text-base font-semibold text-paper"
+            className="w-full min-h-14 rounded-md bg-accent text-base font-semibold text-on-accent"
           >
             Save these numbers
           </button>
         ) : (
           <>
-            <button onClick={() => onConfirm()} className="w-full min-h-14 rounded-2xl bg-ink text-base font-semibold text-paper">
+            <button onClick={() => onConfirm()} className="w-full min-h-14 rounded-md bg-accent text-base font-semibold text-on-accent">
               Yes, that&apos;s right
             </button>
             <button onClick={() => setEditing(true)} className="w-full min-h-14 rounded-2xl border-2 border-line bg-card text-base font-semibold hover:border-ink-3">

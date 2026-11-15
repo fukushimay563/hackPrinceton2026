@@ -131,7 +131,7 @@ export function VerifyStep({ res, send, onChange }: { res: StepResult; send: (e:
       <button
         disabled={!a.readyForReview}
         onClick={() => send({ type: "verify", verified: true }, "Calculating your estimate…")}
-        className="sticky bottom-4 mt-8 w-full min-h-14 rounded-2xl bg-brand text-base font-semibold text-on-brand shadow-lg hover:bg-brand-2 disabled:opacity-40 disabled:shadow-none"
+        className="sticky bottom-4 mt-8 w-full min-h-14 rounded-md bg-accent text-base font-semibold text-on-accent shadow-lg hover:bg-brand-2 disabled:opacity-40 disabled:shadow-none"
       >
         Everything&apos;s right. Calculate my estimate
       </button>
@@ -193,7 +193,7 @@ export function EstimateStep({ res, send }: { res: StepResult; send: (e: FilingE
         provider.
       </p>
       <div className="mt-4 space-y-3">
-        <button onClick={() => send({ type: "approve" })} className="w-full min-h-14 rounded-2xl bg-ink text-base font-semibold text-paper">
+        <button onClick={() => send({ type: "approve" })} className="w-full min-h-14 rounded-md bg-accent text-base font-semibold text-on-accent">
           <span className="inline-flex items-center gap-2">
             <Check size={18} /> Approve this draft
           </span>
@@ -227,7 +227,7 @@ export function ApprovedStep({ res, onAskTutor, onRestart }: { res: StepResult; 
           href="https://www.irs.gov/filing/irs-free-file-do-your-taxes-for-free"
           target="_blank"
           rel="noreferrer"
-          className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl bg-brand text-base font-semibold text-on-brand hover:bg-brand-2"
+          className="flex w-full min-h-14 items-center justify-center gap-2 rounded-md bg-accent text-base font-semibold text-on-accent hover:bg-brand-2"
         >
           File free with IRS Free File <ExternalLink size={16} />
         </a>
@@ -300,7 +300,7 @@ export function UnsupportedStep({ res, onChange, onRestart }: { res: StepResult;
         href="https://www.irs.gov/filing/irs-free-file-do-your-taxes-for-free"
         target="_blank"
         rel="noreferrer"
-        className="mt-5 flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl bg-ink text-base font-semibold text-paper"
+        className="mt-5 flex w-full min-h-14 items-center justify-center gap-2 rounded-md bg-accent text-base font-semibold text-on-accent"
       >
         See IRS Free File options <ExternalLink size={16} />
       </a>

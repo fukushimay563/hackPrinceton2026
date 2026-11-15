@@ -5,7 +5,9 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { fadeUp, staggerParent } from "@/lib/motion";
+import { AnimatedNumber } from "@/components/motion";
 import { AlertCircle, ArrowRight, Bot, ChevronDown, FileCheck2, FileUp, Lightbulb, MessageCircle, PiggyBank, Receipt, Sparkles } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { computePaycheck, PERIODS } from "@/lib/finance/paycheck";
@@ -15,7 +17,7 @@ import { askTutorQuestion } from "@/lib/tutor/ask";
 import { duration, pct, usd } from "@/lib/format";
 import { IS_STATIC } from "@/lib/runtime";
 import { AdvisorTabs } from "@/components/AppShell";
-import { AgentStatusBoard, type AgentEvent } from "@/components/AgentActivity";
+import { AgentActivityIndicator, type AgentEvent } from "@/components/AgentActivity";
 import { Badge, Card, EmptyState, PageHeader, Skeleton, Stat, cn } from "@/components/ui";
 import type { MonthPoint } from "@/components/dashboard/Charts";
 
@@ -36,6 +38,7 @@ export default function AdvisorPage() {
   const [bankingState, setBankingState] = useState<"loading" | "ready" | "unavailable">(IS_STATIC ? "unavailable" : "loading");
   const [agentRun, setAgentRun] = useState<AgentRun | null | undefined>(IS_STATIC ? null : undefined);
   const [showAll, setShowAll] = useState(false);
+  const reduce = useReducedMotion();
 
   useEffect(() => {
     if (IS_STATIC) return;
@@ -83,7 +86,7 @@ export default function AdvisorPage() {
   ];
 
   return (
-    <div>
+    <motion.div variants={staggerParent(0.08)} initial={reduce ? false : "hidden"} animate="show">
       <AdvisorTabs />
       <PageHeader
         step="Financial Advisor · Overview"
@@ -92,13 +95,13 @@ export default function AdvisorPage() {
       />
 
       {/* Next best step + quick actions */}
-      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <Card className="flex flex-col justify-between gap-4 border-ink bg-ink text-paper dark:border-brand/40 dark:bg-brand-soft dark:text-ink">
+      <motion.div variants={fadeUp} className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <Card className="flex flex-col justify-between gap-6 border-obsidian bg-obsidian text-paper">
           <div>
-            <div className="text-xs font-semibold tracking-widest text-mint uppercase dark:text-brand">Your next step</div>
-            <p className="mt-2 text-lg leading-snug font-medium">{next.text}</p>
+            <div className="text-[10px] tracking-[0.018em] text-paper/60 uppercase">Your next step</div>
+            <p className="mt-3 text-[24px] leading-[1.17]">{next.text}</p>
           </div>
-          <Link href={next.href} className="inline-flex w-fit items-center gap-1.5 rounded-xl bg-paper px-4 py-2.5 text-sm font-semibold text-ink transition-transform active:scale-[0.97] dark:bg-brand dark:text-on-brand">
+          <Link href={next.href} className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-md bg-accent px-5 text-sm text-on-accent transition-colors duration-300 hover:bg-[#d6e41c]">
             {next.cta} <ArrowRight size={15} />
           </Link>
         </Card>
@@ -106,11 +109,11 @@ export default function AdvisorPage() {
           {actions.map((a) => {
             const inner = (
               <>
-                <a.icon size={18} className="text-brand" />
-                <span className="mt-2 text-sm leading-tight font-semibold text-ink">{a.label}</span>
+                <a.icon size={18} className="text-ink" />
+                <span className="mt-4 text-[15px] leading-tight text-ink">{a.label}</span>
               </>
             );
-            const cls = "surface lift flex min-h-24 flex-col justify-between rounded-2xl border border-line p-4 text-left hover:border-brand/40";
+            const cls = "lift flex min-h-24 flex-col justify-between rounded-2xl border border-line bg-card p-4 text-left";
             return "href" in a && a.href ? (
               <Link key={a.label} href={a.href} className={cls}>{inner}</Link>
             ) : (
@@ -118,14 +121,14 @@ export default function AdvisorPage() {
             );
           })}
         </div>
-      </div>
+      </motion.div>
 
       {/* Financial overview */}
-      <h2 className="mt-8 mb-3 text-sm font-semibold tracking-widest text-ink-3 uppercase">Financial overview</h2>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="p-5"><Stat label="Monthly take-home" value={usd(monthly)} sub={`from ${usd(pay.annualGross)}/yr gross`} /></Card>
+      <h2 className="mt-12 mb-4 text-[11px] tracking-[0.05em] text-ink-3 uppercase">Financial overview</h2>
+      <motion.div variants={fadeUp} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="p-5"><Stat label="Monthly take-home" value={<AnimatedNumber value={monthly} format={(n) => usd(n)} />} sub={`from ${usd(pay.annualGross)}/yr gross`} /></Card>
         <Card className="p-5">
-          {t ? <Stat label="2025 federal tax (est.)" value={usd(t.tax)} sub={`${pct(t.effectiveRate * 100, 1)} effective rate`} /> : (
+          {t ? <Stat label="2025 federal tax (est.)" value={<AnimatedNumber value={t.tax} format={(n) => usd(n)} />} sub={`${pct(t.effectiveRate * 100, 1)} effective rate`} /> : (
             <div>
               <div className="text-xs font-medium tracking-wide text-ink-3 uppercase">2025 federal tax</div>
               <Link href="/taxes" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand">Add a W-2 to estimate <ArrowRight size={13} /></Link>
@@ -133,12 +136,12 @@ export default function AdvisorPage() {
           )}
         </Card>
         <Card className="p-5">
-          {t ? <Stat label={t.refund >= 0 ? "Expected refund" : "May owe"} value={usd(Math.abs(t.refund))} tone={t.refund >= 0 ? "good" : "bad"} sub="withheld minus estimated tax" /> : <Stat label="Refund or owed" value="—" sub="needs your W-2" />}
+          {t ? <Stat label={t.refund >= 0 ? "Expected refund" : "May owe"} value={<AnimatedNumber value={Math.abs(t.refund)} format={(n) => usd(n)} />} tone={t.refund >= 0 ? "good" : "bad"} sub="withheld minus estimated tax" /> : <Stat label="Refund or owed" value="—" sub="needs your W-2" />}
         </Card>
         <Card className="p-5">
           <Stat label="Needs attention" value={String(missing.length)} tone={missing.length ? "warn" : "good"} sub={missing.length ? "items below" : "nothing missing"} />
         </Card>
-      </div>
+      </motion.div>
 
       {missing.length > 0 && (
         <ul className="mt-3 space-y-2">
@@ -153,11 +156,11 @@ export default function AdvisorPage() {
       )}
 
       {/* Charts */}
-      <div className="mt-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+      <motion.div variants={fadeUp} className="mt-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <Card>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-semibold">Income vs. spending</h3>
-            {banking?.source && <Badge tone={banking.source.provider === "nessie" ? "info" : "warn"}>{banking.source.provider === "nessie" ? "Nessie sandbox (demo)" : "Fictional sample data"}</Badge>}
+            {banking?.source && <Badge tone={banking.source.provider === "nessie" ? "info" : "default"}>{banking.source.provider === "nessie" ? "Nessie sandbox (demo)" : "Fictional sample data"}</Badge>}
           </div>
           {bankingState === "loading" && <ChartFallback />}
           {bankingState === "unavailable" && <EmptyState title="No transactions yet" body="Connect demo banking data on My Budget to see your monthly income and spending." action={<Link href="/budget" className="text-sm font-semibold text-brand">Open My Budget →</Link>} />}
@@ -181,13 +184,13 @@ export default function AdvisorPage() {
               </details>
             </>
           ) : (
-            <EmptyState icon={<FileUp size={18} />} title="No tax documents yet" body="Upload your first W-2 to begin understanding your tax situation." action={<Link href="/taxes" className="inline-flex items-center gap-1 rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-paper">Upload a W-2</Link>} />
+            <EmptyState icon={<FileUp size={18} />} title="No tax documents yet" body="Upload your first W-2 to begin understanding your tax situation." action={<Link href="/taxes" className="inline-flex min-h-11 items-center gap-1 rounded-md bg-accent px-5 text-sm text-on-accent">Upload a W-2</Link>} />
           )}
         </Card>
-      </div>
+      </motion.div>
 
       {/* Agents + documents */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <motion.div variants={fadeUp} className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card>
           <div className="mb-3 flex items-center justify-between">
             <h3 className="flex items-center gap-2 font-semibold"><Bot size={17} className="text-brand" /> Agent activity</h3>
@@ -201,7 +204,7 @@ export default function AdvisorPage() {
                 Last run: <b className="text-ink">{agentRun.status === "awaiting-approval" ? "waiting for your approval" : agentRun.status}</b>
                 {agentRun.verification && <> · verification <b className="text-ink">{agentRun.verification.status}</b></>}
               </p>
-              <AgentStatusBoard events={agentRun.events} shown={agentRun.events.length} busy={false} compact />
+              <div className="rounded-xl border border-line bg-sunken px-3 pt-3 pb-1"><AgentActivityIndicator events={agentRun.events} shown={agentRun.events.length} busy={false} /></div>
             </>
           )}
         </Card>
@@ -222,12 +225,12 @@ export default function AdvisorPage() {
             <EmptyState icon={<FileUp size={18} />} title="No financial documents yet" body="Most first-time filers only need a W-2 from their employer. We'll tell you if anything else is required." action={<Link href="/taxes" className="text-sm font-semibold text-brand">Upload a document →</Link>} />
           )}
         </Card>
-      </div>
+      </motion.div>
 
       {/* Insights with progressive disclosure */}
       {insights.length > 0 && (
         <>
-          <h2 className="mt-8 mb-3 flex items-center gap-2 text-sm font-semibold tracking-widest text-ink-3 uppercase"><Lightbulb size={15} /> What stands out</h2>
+          <h2 className="mt-12 mb-4 flex items-center gap-2 text-[11px] tracking-[0.05em] text-ink-3 uppercase"><Lightbulb size={15} /> What stands out</h2>
           <motion.div layout className="grid gap-3 md:grid-cols-2">
             <AnimatePresence initial={false}>
               {visible.map((i) => (
@@ -258,12 +261,12 @@ export default function AdvisorPage() {
             setTutorOpen(true);
             askTutorQuestion("Where did my paycheck go?", "/advisor");
           }}
-          className="inline-flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2 text-sm font-semibold text-ink-2 hover:text-ink"
+          className="inline-flex items-center gap-2 rounded-md border border-line bg-card px-4 py-2 text-sm font-semibold text-ink-2 hover:text-ink"
         >
           <Sparkles size={15} className="text-brand" /> Ask FinPilot to explain these numbers
         </button>
       </div>
       <p className="mt-6 text-xs text-ink-3">Observations come from simple rules applied to your numbers. They&apos;re educational, not personalized financial advice.</p>
-    </div>
+    </motion.div>
   );
 }

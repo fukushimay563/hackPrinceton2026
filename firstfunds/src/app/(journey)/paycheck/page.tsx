@@ -11,7 +11,8 @@ import { Button, Card, InfoTip, PageHeader, SliderField, Stat } from "@/componen
 import { AdvisorTabs } from "@/components/AppShell";
 
 // Validated categorical order (dataviz validator, light surface).
-const COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#6250d6"];
+// Take-home pay is the money signal (highlighter); deductions are monochrome steps.
+const COLORS = ["#e4f222", "#1a1919", "#555352", "#8a8887", "#bdbbb9"];
 
 const FREQ_LABEL: Record<PayFrequency, string> = {
   weekly: "Weekly",
@@ -135,7 +136,7 @@ export default function PaycheckPage() {
                       innerRadius="66%"
                       outerRadius="98%"
                       paddingAngle={1.5}
-                      stroke="#fff"
+                      stroke="var(--color-card)"
                       strokeWidth={2}
                       animationDuration={500}
                     >
@@ -145,7 +146,7 @@ export default function PaycheckPage() {
                     </Pie>
                     <Tooltip
                       formatter={(v) => usd(Number(v), true)}
-                      contentStyle={{ borderRadius: 12, border: "1px solid #e3e8e4", fontSize: 13 }}
+                      contentStyle={{ borderRadius: 12, border: "1px solid var(--color-line)", background: "var(--color-card)", fontSize: 13 }}
                     />
                   </PieChart>
                 </ResponsiveContainer>

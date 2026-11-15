@@ -24,8 +24,8 @@ const NEEDS_PROFILE = ["/advisor", "/paycheck", "/credit"];
 export function Logo() {
   return (
     <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight text-ink">
-      <span className="grid h-8 w-8 place-items-center rounded-lg bg-ink text-sm font-bold text-mint">F</span>
-      <span>FirstFunds</span>
+      <span className="grid h-8 w-8 place-items-center rounded-md bg-obsidian text-sm text-accent">F</span>
+      <span className="text-[17px]">FirstFunds</span>
     </Link>
   );
 }
@@ -39,7 +39,7 @@ export function AdvisorTabs() {
     { href: "/credit", label: "Credit card", icon: CreditCard },
   ];
   return (
-    <nav aria-label="Financial Advisor" className="surface mb-6 flex gap-1 overflow-x-auto rounded-2xl border border-line p-1">
+    <nav aria-label="Financial Advisor" className="mb-8 flex gap-1 overflow-x-auto border-b border-line pb-2">
       {tabs.map((t) => {
         const on = path === t.href;
         return (
@@ -47,9 +47,9 @@ export function AdvisorTabs() {
             key={t.href}
             href={t.href}
             aria-current={on ? "page" : undefined}
-            className={cn("relative flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold transition-colors", on ? "text-paper" : "text-ink-2 hover:bg-ink/5")}
+            className={cn("relative flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors duration-300", on ? "text-on-accent" : "text-ink-2 hover:bg-sunken")}
           >
-            {on && <motion.span layoutId="advisor-tab" className="absolute inset-0 rounded-xl bg-ink" transition={{ type: "spring", stiffness: 500, damping: 38 }} />}
+            {on && <motion.span layoutId="advisor-tab" className="absolute inset-0 rounded-md bg-accent" transition={{ duration: 0.3, ease: "easeOut" }} />}
             <t.icon size={15} className="relative" /> <span className="relative">{t.label}</span>
           </Link>
         );
@@ -68,10 +68,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      <header className="glass sticky top-0 z-20 border-b border-line/80">
+      <header className="glass sticky top-0 z-20 border-b border-line">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <Logo />
-          <nav aria-label="Features" className="hidden items-center gap-1 rounded-full border border-line bg-card/70 p-1 md:flex">
+          <nav aria-label="Features" className="hidden items-center gap-1 md:flex">
             {FEATURES.map((f) => {
               const on = f === active;
               return (
@@ -80,12 +80,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                   href={f.href}
                   aria-current={on ? "page" : undefined}
                   className={cn(
-                    "relative flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors",
-                    on ? "text-paper" : "text-ink-2 hover:text-ink",
+                    "relative flex items-center gap-2 rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors",
+                    on ? "text-on-accent" : "text-ink-2 hover:text-ink",
                   )}
                 >
-                  {on && <motion.span layoutId="nav-pill" className="absolute inset-0 rounded-full bg-ink" transition={{ type: "spring", stiffness: 500, damping: 38 }} />}
-                  <f.icon size={15} className={cn("relative", on && "text-mint")} />
+                  {on && <motion.span layoutId="nav-pill" className="absolute inset-0 rounded-md bg-accent" transition={{ duration: 0.3, ease: "easeOut" }} />}
+                  <f.icon size={15} className="relative" />
                   <span className="relative">{f.label}</span>
                 </Link>
               );
@@ -93,13 +93,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
           <div className="flex items-center gap-2">
             {auth.configured && !auth.loading && (
-              <Link href="/account" className="hidden rounded-full border border-line bg-card px-3 py-1.5 text-sm font-medium text-ink-2 hover:text-ink sm:block">
+              <Link href="/account" className="hidden rounded-md border border-line bg-card px-3 py-1.5 text-sm font-medium text-ink-2 hover:text-ink sm:block">
                 {auth.label ?? "Sign in"}
               </Link>
             )}
             {profile?.isDemo && (
-              <span className="hidden items-center gap-2 rounded-full border border-warn/30 bg-warn-soft px-3 py-1 text-sm text-warn lg:flex" title="Sample data, not a real person">
-                <span className="grid h-5 w-5 place-items-center rounded-full bg-card text-[11px] font-bold text-ink">M</span>
+              <span className="hidden items-center gap-2 rounded-md border border-line bg-card px-3 py-1.5 text-sm text-ink-2 lg:flex" title="Sample data, not a real person">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent ring-1 ring-ink/20" aria-hidden />
                 Demo: Maya
               </span>
             )}
@@ -122,9 +122,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               key={f.href}
               href={f.href}
               aria-current={on ? "page" : undefined}
-              className={cn("relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-semibold", on ? "text-paper" : "text-ink-2")}
+              className={cn("relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-md text-[11px]", on ? "text-on-accent" : "text-ink-2")}
             >
-              {on && <motion.span layoutId="nav-pill-mobile" className="absolute inset-0 rounded-xl bg-ink" transition={{ type: "spring", stiffness: 500, damping: 38 }} />}
+              {on && <motion.span layoutId="nav-pill-mobile" className="absolute inset-0 rounded-md bg-accent" transition={{ duration: 0.3, ease: "easeOut" }} />}
               <f.icon size={18} className="relative" />
               <span className="relative">{f.short}</span>
             </Link>

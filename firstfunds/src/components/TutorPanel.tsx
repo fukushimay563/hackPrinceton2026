@@ -2,6 +2,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { drawerVariants } from "@/lib/motion";
 import { X } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { TutorChat } from "./TutorChat";
@@ -44,10 +45,10 @@ export function TutorPanel() {
           />
           <motion.div
             className="absolute top-0 right-0 flex h-full w-full max-w-md flex-col border-l border-line bg-paper shadow-2xl"
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ type: "tween", duration: 0.26, ease: [0.2, 0.7, 0.2, 1] }}
+            variants={drawerVariants}
+            initial="hidden"
+            animate="show"
+            exit="exit"
           >
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <div>
