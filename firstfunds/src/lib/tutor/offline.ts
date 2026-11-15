@@ -118,11 +118,29 @@ export function offlineAnswer(question: string, ctx: TutorContext, sources: Sour
     ].join("\n\n");
   }
 
+  // General tax rules with no personal numbers: answer straight from the matching
+  // official source (first sentences, verbatim from the grounding corpus).
+  if (!t && /(deduction|standard|bracket|marginal|effective|refund|owe|withh|tax|file|filing)/.test(q)) {
+    const general = sources.find((d) => ["std-ded-2025", "brackets-2025", "refund-withholding", "tax-table", "free-file", "fica"].includes(d.id));
+    if (general && sources.indexOf(general) < 3) {
+      const brief = general.text.split(/(?<=\.)\s+/).slice(0, 3).join(" ");
+      return `In general: ${brief}${cite(sources, general.id)}`;
+    }
+  }
+
   // A lesson the user asked about (e.g. from "Ask FinPilot about this").
   const lessonDoc = sources.find((d) => d.id.startsWith("lesson-"));
   if (lessonDoc && (/explain more about|lesson/.test(q) || sources[0] === lessonDoc)) {
     const i = sources.indexOf(lessonDoc) + 1;
     return `Here's the short version: ${lessonDoc.text} [${i}]\n\nWant me to connect it to your own numbers? Ask about your refund, your paycheck, or your card.`;
+  }
+
+  // A plain "what is / how does" question that matched an official source: answer from
+  // that source's opening sentences, cited, rather than refusing.
+  const reference = sources.slice(0, 3).find((d) => !d.id.startsWith("help-") && d.id !== "app-method");
+  if (reference && /^(what|how|why|when|who|is|are|does|do|can|should|explain|define|tell me)\b/.test(q.trim())) {
+    const brief = reference.text.split(/(?<=\.)\s+/).slice(0, 3).join(" ");
+    return `In general: ${brief}${cite(sources, reference.id)}`;
   }
 
   return OFFLINE_FALLBACK;

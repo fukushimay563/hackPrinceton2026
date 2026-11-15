@@ -36,7 +36,7 @@ export async function askTutorQuestion(question: string, page: string) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Something went wrong");
-    useApp.getState().pushChat({ role: "assistant", content: data.answer, sources: data.sources, mode: data.mode });
+    useApp.getState().pushChat({ role: "assistant", content: data.answer, sources: data.sources, mode: data.mode, fallbackReason: data.fallbackReason });
     useApp.getState().setTutorStatus(false, null);
   } catch (e) {
     useApp.getState().setTutorStatus(false, e instanceof Error ? e.message : "The tutor couldn't answer. Try again.");

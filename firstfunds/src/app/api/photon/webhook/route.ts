@@ -1,9 +1,10 @@
-// Photon 2.0 (Spectrum) native webhook.
-// Verifies the signature BEFORE doing anything, dedupes on message.id, acks fast,
-// and runs the agents after the response (Vercel keeps `after()` work alive).
+// Photon 2.0 webhook (`message.received`, Standard Webhooks signatures).
+// Verifies the signature on the exact raw bytes BEFORE anything else, dedupes on the
+// Photon message id (in handleInbound), acks fast with 200, and runs FinPilot / the
+// agents after the response (`after()` keeps that work alive on Vercel).
 import { after } from "next/server";
 import { handleInbound } from "@/lib/photon/handler";
-import { getSpectrumApp, liveSender, mockSecret, mockSender, photonMode, verifyDelivery } from "@/lib/photon/transport";
+import { isProductionDeployment, liveSender, mockSecret, mockSender, photonConfig, photonConfigProblems, photonMode, verifyDelivery } from "@/lib/photon/transport";
 import { log } from "@/lib/agents/logger";
 import { rateLimit } from "@/lib/server/rateLimit";
 
@@ -12,36 +13,46 @@ export async function POST(req: Request) {
   if (limited) return limited;
   if (Number(req.headers.get("content-length") ?? 0) > 256_000) return Response.json({ error: "Payload too large" }, { status: 413 });
 
-  if (photonMode() === "live") {
-    // Official SDK verifies the signature (401 on mismatch) and builds the Space.
-    const app = await getSpectrumApp();
-    let deliver!: (v: { space: { id: string; send: (t: string) => Promise<unknown> }; message: Record<string, unknown> }) => void;
-    const delivered = new Promise<{ space: { id: string; send: (t: string) => Promise<unknown> }; message: Record<string, unknown> }>((ok) => (deliver = ok));
-    const res = await app.webhook(req, (space, message) => deliver({ space, message: message as Record<string, unknown> }));
-    if (res.status !== 200) {
-      log("warn", "photon.webhook.rejected", { status: res.status });
-      return res;
+  const mode = photonMode();
+  let secret: string;
+  if (mode === "live") {
+    const cfg = photonConfig();
+    if (!cfg) {
+      // Names of the bad settings only; values are never logged or returned.
+      log("error", "photon.config.invalid", { problems: photonConfigProblems() });
+      return Response.json({ error: "Photon is misconfigured on the server" }, { status: 500 });
     }
-    after(async () => {
-      const timeout = new Promise<null>((ok) => setTimeout(() => ok(null), 10_000));
-      const got = await Promise.race([delivered, timeout]);
-      if (!got) return;
-      const m = got.message as { id: string; content?: { type: string; text?: string }; sender?: { id?: string }; platform?: string };
-      await handleInbound(
-        { eventId: m.id, spaceId: got.space.id, senderId: m.sender?.id ?? null, platform: m.platform ?? "imessage", text: m.content?.type === "text" ? (m.content.text ?? null) : null, at: Date.now() },
-        liveSender(got.space),
-      );
-    });
-    return res;
+    secret = cfg.webhookSecret;
+  } else {
+    // Production must use the real Photon API: no mock deliveries unless explicitly enabled.
+    if (isProductionDeployment() && process.env.ENABLE_AGENT_DEMO !== "1") {
+      log("error", "photon.config.missing", { problems: photonConfigProblems() });
+      return Response.json({ error: "Photon is not configured" }, { status: 503 });
+    }
+    secret = mockSecret();
   }
 
-  // MOCK mode: same official verifier + schema, local test secret, replies recorded.
   const raw = new Uint8Array(await req.arrayBuffer());
-  const v = await verifyDelivery(raw, req.headers, mockSecret());
+  const v = await verifyDelivery(raw, req.headers, secret);
   if (!v.ok) {
-    log("warn", "photon.webhook.rejected", { status: v.status, reason: v.reason, mode: "mock" });
+    log("warn", "photon.webhook.rejected", { status: v.status, reason: v.reason, mode });
     return Response.json({ error: v.reason }, { status: v.status });
   }
-  after(() => handleInbound(v.inbound, mockSender()).then(() => undefined));
-  return Response.json({ ok: true, mode: "mock", eventId: v.inbound.eventId });
+  if (!v.inbound) {
+    // Other events (and our own outbound echoes) are acknowledged so Photon doesn't retry them.
+    return Response.json({ ok: true, mode, ignored: v.ignored });
+  }
+  const inbound = v.inbound;
+  const sender =
+    mode === "live" && inbound.agentUserId
+      ? liveSender({ spaceId: inbound.spaceId, agentUserId: inbound.agentUserId, parentMessageId: inbound.eventId })
+      : mockSender();
+  after(async () => {
+    try {
+      await handleInbound(inbound, sender);
+    } catch (e) {
+      log("error", "photon.webhook.handler_error", { eventId: inbound.eventId, error: e instanceof Error ? e.message.slice(0, 120) : "unknown" });
+    }
+  });
+  return Response.json({ ok: true, mode, eventId: inbound.eventId });
 }

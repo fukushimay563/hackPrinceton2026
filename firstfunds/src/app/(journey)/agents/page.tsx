@@ -115,7 +115,7 @@ export default function AgentConsole() {
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? d.verification?.reason ?? "Request failed");
       setModes(d.modes);
-      setSecurity((s) => [{ ok: true, label: "Webhook signature verified", detail: `Official verifySpectrumSignature · event ${String(d.verification.eventId).slice(0, 12)}…` }, ...s].slice(0, 6));
+      setSecurity((s) => [{ ok: true, label: "Webhook signature verified", detail: `Standard Webhooks signature (Photon 2.0) · event ${String(d.verification.eventId).slice(0, 12)}…` }, ...s].slice(0, 6));
       if (d.run) {
         setRun(d.run);
         setShown(0);

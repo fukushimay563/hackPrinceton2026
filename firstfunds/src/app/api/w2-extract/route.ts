@@ -1,6 +1,6 @@
 // Reads a W-2 image/PDF with Gemini and returns only the boxes we need.
 // The file is processed in memory and never written to disk or logged.
-import { GoogleGenAI } from "@google/genai";
+import { describeGeminiError, geminiClient, geminiModel } from "@/lib/server/gemini";
 import { rateLimit } from "@/lib/server/rateLimit";
 
 
@@ -10,8 +10,8 @@ const OK_TYPES = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
 export async function POST(req: Request) {
   const limited = rateLimit(req, "w2", 8, 60_000);
   if (limited) return limited;
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) {
+  const ai = geminiClient();
+  if (!ai) {
     return Response.json(
       { error: "W-2 upload needs a Gemini API key on the server. Enter the numbers manually instead." },
       { status: 503 },
@@ -25,9 +25,8 @@ export async function POST(req: Request) {
 
   try {
     const data = Buffer.from(await file.arrayBuffer()).toString("base64");
-    const ai = new GoogleGenAI({ apiKey: key });
     const res = await ai.models.generateContent({
-      model: process.env.GEMINI_MODEL || "gemini-flash-latest",
+      model: geminiModel(),
       contents: [
         {
           role: "user",
@@ -45,8 +44,10 @@ export async function POST(req: Request) {
     const parsed = sanitize(JSON.parse(res.text ?? "{}"));
     if (!parsed.isW2) return Response.json({ error: "That doesn't look like a W-2. Try another image or enter it manually." }, { status: 422 });
     return Response.json({ fields: parsed });
-  } catch {
-    return Response.json({ error: "Couldn't read that W-2. Please enter the numbers manually." }, { status: 502 });
+  } catch (e) {
+    const reason = e instanceof SyntaxError ? "The reader returned something we couldn't parse." : describeGeminiError(e);
+    console.error("W-2 extraction failed:", reason);
+    return Response.json({ error: `Couldn't read that W-2 (${reason}) Please enter the numbers manually.` }, { status: 502 });
   }
 }
 

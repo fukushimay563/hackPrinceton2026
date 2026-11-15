@@ -46,7 +46,7 @@ Sanitized notes from real obstacles hit while building FirstFunds. No credential
 6. **Lesson:** Never use concise arrows for effects that call DOM methods. Return values you didn't expect become cleanups. A lint rule enforcing block bodies in `useEffect` prevents this.
 7. **Status:** Not published.
 
-## 5. Photon/Spectrum webhook headers come from the SDK source, not the docs
+## 5. Photon/Spectrum webhook headers come from the SDK source, not the docs (superseded: the app now uses Photon 2.0 Beta, Standard Webhooks)
 
 1. **Title:** Native Spectrum webhooks are signed `X-Spectrum-Signature: v0=<hex HMAC-SHA256(secret, "v0:"+ts+":"+rawBody)>` with `X-Spectrum-Timestamp`.
 2. **Problem:** The public webhook docs describe the signed string and the 5-minute replay window but don't name the headers or the encoding, which a custom verifier needs.

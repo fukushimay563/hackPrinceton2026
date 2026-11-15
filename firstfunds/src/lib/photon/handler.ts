@@ -1,17 +1,32 @@
-// Photon (Spectrum) conversation handler: verified inbound text → Deep Agents
-// supervisor → verified, channel-safe reply. Channel-agnostic: the transport
-// (live Spectrum space or mock) is passed in as a Sender.
+// Photon 2.0 conversation handler: verified inbound text → FinPilot (general
+// questions) or the Deep Agents supervisor (the asker's own return) → channel-safe
+// reply. Channel-agnostic: the transport (live Photon API or mock) is passed in as a Sender.
 import { log } from "../agents/logger";
 import { redactText } from "../agents/redact";
 import { appUrl } from "../agents/secureLink";
 import { runSupervisor, type RunResult } from "../agents/supervisor";
 import { store } from "../agents/store";
+import { DEMO_TENANT, ensureDemoDocuments } from "../agents/documents";
+import { answerQuestion, GENERAL_CONTEXT } from "../tutor/answer";
 
-export type InboundMessage = { eventId: string; spaceId: string; senderId: string | null; platform: string; text: string | null; at: number };
-export type Sender = { send: (text: string) => Promise<void>; mode: "live" | "mock" };
+export type InboundMessage = {
+  /** Photon message id (dedupe key). */
+  eventId: string;
+  spaceId: string;
+  /** Sender handle: phone number or Apple ID. */
+  senderId: string | null;
+  platform: string;
+  text: string | null;
+  at: number;
+  /** The project's agent user (line) that received the message; replies go out from it. */
+  agentUserId?: string;
+};
+export type Sender = { send: (text: string, idempotencyKey?: string) => Promise<void>; mode: "live" | "mock" };
 
 export type HandleResult = {
-  status: "duplicate" | "ignored" | "unlinked" | "stopped" | "opted-out" | "opted-in" | "answered" | "error";
+  status: "duplicate" | "ignored" | "unlinked" | "stopped" | "opted-out" | "opted-in" | "help" | "answered" | "error";
+  /** Which brain answered: FinPilot (general education, no personal data) or the tax supervisor. */
+  route?: "finpilot" | "supervisor";
   run?: RunResult;
   replies: { text: string; status: "sent" | "failed" | "skipped-duplicate" | "blocked-unsafe" }[];
 };
@@ -19,18 +34,20 @@ export type HandleResult = {
 const MAX_TEXT = 1000;
 
 /** Messaging channels must never carry identifiers, amounts or document contents. */
-export function isSafeForMessage(text: string): boolean {
+export function isSafeForMessage(text: string, opts: { allowPublicAmounts?: boolean } = {}): boolean {
   const withoutLinks = text.replace(/https?:\/\/\S+/g, "");
   if (redactText(withoutLinks) !== withoutLinks) return false; // SSN, EIN, account, email, phone
-  if (/\$\s?\d/.test(withoutLinks)) return false; // dollar amounts
+  // Dollar amounts are blocked unless the answer was built with NO personal context
+  // (e.g. "the 2025 standard deduction is $15,750"), where amounts are public rules.
+  if (!opts.allowPublicAmounts && /\$\s?\d/.test(withoutLinks)) return false;
   return true;
 }
 
 /** Send with idempotency + bounded retries. Never re-sends something already delivered. */
-export async function sendSafely(sender: Sender, tenant: string, spaceId: string, text: string, key: string, attempts = 3): Promise<HandleResult["replies"][number]> {
+export async function sendSafely(sender: Sender, tenant: string, spaceId: string, text: string, key: string, attempts = 3, opts: { allowPublicAmounts?: boolean } = {}): Promise<HandleResult["replies"][number]> {
   const prior = store.outboxGet(key);
   if (prior?.status === "sent") return { text: prior.text, status: "skipped-duplicate" };
-  if (!isSafeForMessage(text)) {
+  if (!isSafeForMessage(text, opts)) {
     log("warn", "photon.reply.blocked_unsafe", { key });
     text = "I have an update for you. For your privacy, please open FirstFunds to see it.";
   }
@@ -38,7 +55,7 @@ export async function sendSafely(sender: Sender, tenant: string, spaceId: string
   for (let i = item.attempts; i < attempts; i++) {
     try {
       item.attempts = i + 1;
-      await sender.send(text);
+      await sender.send(text, key);
       store.outboxPut({ ...item, text, status: "sent" });
       log("info", "photon.reply.sent", { key, attempts: item.attempts, mode: sender.mode });
       return { text, status: "sent" };
@@ -62,6 +79,64 @@ function parseYesNo(t: string): "yes" | "no" | "not_sure" | null {
   return null;
 }
 
+const MAX_REPLY = 900;
+
+/**
+ * Personal = about the asker's (or anyone's) own return, documents or status, or a
+ * reply to a pending question. Those need a linked number and go to the supervisor.
+ * Everything else is general money/tax education and goes to FinPilot with no
+ * personal context and no banking tools.
+ */
+export function isPersonalRequest(text: string): boolean {
+  const t = text.toLowerCase();
+  const firstPerson = /\b(my|me|mine|i|i'm|im|i've|i'd|our|we|us)\b/.test(t);
+  const someoneElses = /\b(?!(?:what|it|that|there|here|who|where|how|let|he|she)'s)[a-z]+'s\s+(refund|return|taxes|w-?2|documents?|status|estimate|income|account)/.test(t);
+  const returnWords = /(refund|return|w-?2|1099|estimate|status|owe|withh|document|upload|dependent|filing|file|ready|deadline|account|balance|spending|budget|transaction)/.test(t);
+  return someoneElses || (firstPerson && returnWords);
+}
+
+/** iMessage is plain text: drop [n] citation markers and markdown, keep it short, add sources. */
+export function formatForMessage(answer: string, sources: { title: string; url: string }[]): string {
+  let text = answer
+    .replace(/\s?\[\d+\]/g, "")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/^#+\s*/gm, "")
+    .replace(/^\s*[-*]\s+/gm, "• ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (text.length > MAX_REPLY) text = text.slice(0, text.lastIndexOf(" ", MAX_REPLY)).trimEnd() + "…";
+  // Only full public links (in-app paths mean nothing in a text), no duplicates.
+  const web = sources.filter((s) => /^https:\/\//.test(s.url));
+  const unique = web.filter((s, i) => web.findIndex((o) => o.url === s.url) === i);
+  const links = unique.slice(0, 2).map((s) => `• ${s.title.replace(/^Academy: /, "")}: ${s.url}`);
+  return links.length ? `${text}\n\nSources:\n${links.join("\n")}` : text;
+}
+
+/** Numbers listed in PHOTON_DEMO_NUMBERS are linked to the synthetic demo taxpayer (judging/demo only). */
+function demoNumbers(): Set<string> {
+  return new Set((process.env.PHOTON_DEMO_NUMBERS ?? "").split(",").map((n) => n.trim()).filter(Boolean));
+}
+
+// Opt-outs from numbers that never linked an account still have to be honoured.
+const gu = globalThis as unknown as { __ffUnlinkedStops?: Set<string> };
+const unlinkedStops = (gu.__ffUnlinkedStops ??= new Set<string>());
+
+const HELP_TEXT =
+  "FirstFunds by text: ask any money or tax question (\"what is a W-2?\", \"how does APR work?\"). Questions about your own return need a linked number. Never text your SSN, account numbers or documents. Reply STOP to opt out.";
+
+async function answerGeneral(msg: InboundMessage, text: string, sender: Sender, tenant: string): Promise<HandleResult> {
+  try {
+    const res = await answerQuestion({ question: text, context: GENERAL_CONTEXT, bankingTools: false, channel: "message" });
+    const reply = await sendSafely(sender, tenant, msg.spaceId, formatForMessage(res.answer, res.sources), `reply:${msg.eventId}`, 3, { allowPublicAmounts: true });
+    log("info", "photon.finpilot.answered", { eventId: msg.eventId, mode: res.mode });
+    return { status: "answered", route: "finpilot", replies: [reply] };
+  } catch (e) {
+    log("error", "photon.finpilot.error", { eventId: msg.eventId, error: e instanceof Error ? e.message : "unknown" });
+    const reply = await sendSafely(sender, tenant, msg.spaceId, "Sorry, I couldn't answer that right now. Please try again in a few minutes.", `reply:${msg.eventId}`);
+    return { status: "error", route: "finpilot", replies: [reply] };
+  }
+}
+
 export async function handleInbound(msg: InboundMessage, sender: Sender): Promise<HandleResult> {
   // 1. At-least-once delivery → exactly-once side effects.
   if (!store.claimEvent(`photon:${msg.eventId}`)) {
@@ -71,27 +146,54 @@ export async function handleInbound(msg: InboundMessage, sender: Sender): Promis
   if (!msg.text || !msg.senderId) return { status: "ignored", replies: [] };
   const text = msg.text.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, MAX_TEXT);
 
-  // 2. Identity: only linked numbers reach a taxpayer's data.
-  const link = store.phoneLink(msg.senderId);
+  // 2. Identity: only linked numbers reach a taxpayer's data. Demo numbers (env) map to
+  //    the synthetic demo taxpayer, never to a real person's record.
+  let link = store.phoneLink(msg.senderId);
+  if (!link && demoNumbers().has(msg.senderId)) {
+    ensureDemoDocuments();
+    store.linkPhone(msg.senderId, DEMO_TENANT, false); // replies only; no proactive notifications
+    link = store.phoneLink(msg.senderId);
+  }
+  const isStop = /^\s*(stop|unsubscribe|cancel|quit|end)\s*$/i.test(text);
+  const isStart = /^\s*(start|unstop)\s*$/i.test(text);
+  const isHelp = /^\s*(help|info)\s*$/i.test(text);
+
   if (!link) {
-    const reply = await sendSafely(sender, "unlinked", msg.spaceId, `Hi! To use FirstFunds by text, link this number from your Account page first: ${appUrl("/account")}`, `reply:${msg.eventId}`);
+    if (isStop) {
+      unlinkedStops.add(msg.senderId);
+      const reply = await sendSafely(sender, "unlinked", msg.spaceId, "You're unsubscribed from FirstFunds messages. Reply START to turn them back on.", `reply:${msg.eventId}`);
+      return { status: "opted-out", replies: [reply] };
+    }
+    if (isStart) unlinkedStops.delete(msg.senderId);
+    if (unlinkedStops.has(msg.senderId)) return { status: "stopped", replies: [] };
+    if (isHelp || isStart) {
+      const reply = await sendSafely(sender, "unlinked", msg.spaceId, HELP_TEXT, `reply:${msg.eventId}`);
+      return { status: isStart ? "opted-in" : "help", replies: [reply] };
+    }
+    if (!isPersonalRequest(text)) return answerGeneral(msg, text, sender, "unlinked");
+    const reply = await sendSafely(sender, "unlinked", msg.spaceId, `Hi! I can answer general money and tax questions here. For questions about your own return, link this number from your Account page first: ${appUrl("/account")}`, `reply:${msg.eventId}`);
     return { status: "unlinked", replies: [reply] };
   }
   const { tenant } = link;
   const convo = store.conversation(tenant, msg.spaceId);
+  const demoNote = tenant === DEMO_TENANT ? " (Demo data: synthetic taxpayer, not a real return.)" : "";
 
   // 3. Consent keywords.
-  if (/^\s*(stop|unsubscribe|cancel)\s*$/i.test(text)) {
+  if (isStop) {
     store.setStopped(msg.senderId, true);
     const reply = await sendSafely(sender, tenant, msg.spaceId, "You're unsubscribed from FirstFunds messages. Reply START to turn them back on.", `reply:${msg.eventId}`);
     return { status: "opted-out", replies: [reply] };
   }
-  if (/^\s*(start|unstop)\s*$/i.test(text)) {
+  if (isStart) {
     store.setStopped(msg.senderId, false);
     const reply = await sendSafely(sender, tenant, msg.spaceId, "You're subscribed again. Ask me anything about your 2025 return.", `reply:${msg.eventId}`);
     return { status: "opted-in", replies: [reply] };
   }
   if (link.stopped) return { status: "stopped", replies: [] }; // no messages without consent
+  if (isHelp) {
+    const reply = await sendSafely(sender, tenant, msg.spaceId, HELP_TEXT, `reply:${msg.eventId}`);
+    return { status: "help", replies: [reply] };
+  }
 
   // 4. Conversational answers to a pending question are the USER's input, recorded by
   //    the handler with an audit entry — never written by an agent.
@@ -105,6 +207,12 @@ export async function handleInbound(msg: InboundMessage, sender: Sender): Promis
       request = `The taxpayer answered the dependent question: ${yn}.`;
       ack = yn === "not_sure" ? "No problem. We'll come back to that. " : "Thanks, noted. ";
     }
+  }
+  // General education questions (no pending answer, nothing about their own return) go
+  // to FinPilot without personal context, so the reply can't leak their numbers.
+  if (request === text && !isPersonalRequest(text)) {
+    store.remember(tenant, "pattern", { channel: "photon", intent: "general" });
+    return answerGeneral(msg, text, sender, tenant);
   }
   store.remember(tenant, "pattern", { channel: "photon", intent: request === text ? "question" : "answer" });
 
@@ -120,31 +228,45 @@ export async function handleInbound(msg: InboundMessage, sender: Sender): Promis
   }
 
   // 6. Reply = the communication agent's verified, channel-safe text.
-  const replyText = ack + (run.reply?.text ?? "I couldn't verify an answer yet. Please open FirstFunds.");
+  const replyText = ack + (run.reply?.text ?? "I couldn't verify an answer yet. Please open FirstFunds.") + demoNote;
   const reply = await sendSafely(sender, tenant, msg.spaceId, replyText, `reply:${msg.eventId}`);
   convo.pending = run.reply?.asks.includes("dependent") ? { kind: "dependent" } : null;
   convo.lastRunId = run.runId;
   convo.updatedAt = Date.now();
-  linkSpace(msg.senderId, msg.spaceId);
-  return { status: "answered", run, replies: [reply] };
+  linkSpace(msg.senderId, msg);
+  return { status: "answered", route: "supervisor", run, replies: [reply] };
 }
 
-// Remember which conversation to use for consented notifications.
-const g = globalThis as unknown as { __ffSpaces?: Map<string, string> };
-const spaces = (g.__ffSpaces ??= new Map<string, string>());
-function linkSpace(phone: string, spaceId: string) {
-  spaces.set(phone, spaceId);
+// Remember which conversation (and receiving line) to use for consented notifications.
+type Route = { spaceId: string; agentUserId?: string };
+const g = globalThis as unknown as { __ffSpaces?: Map<string, Route> };
+const spaces = (g.__ffSpaces ??= new Map<string, Route>());
+function linkSpace(phone: string, msg: InboundMessage) {
+  spaces.set(phone, { spaceId: msg.spaceId, agentUserId: msg.agentUserId });
 }
 
 /**
  * Proactive notification. Sent ONLY if the user opted in and hasn't replied STOP.
  * Content is generic: no amounts, no document details — just a link to the app.
  */
-export async function notify(phone: string, kind: "estimate-saved", runId: string, sender: Sender): Promise<HandleResult["replies"][number] | { status: "no-consent" | "no-conversation" }> {
+export async function notify(
+  phone: string,
+  kind: "estimate-saved",
+  runId: string,
+  sender?: Sender,
+): Promise<HandleResult["replies"][number] | { status: "no-consent" | "no-conversation" }> {
   const link = store.phoneLink(phone);
   if (!link || !link.notifyConsent || link.stopped) return { status: "no-consent" };
-  const spaceId = spaces.get(phone);
-  if (!spaceId) return { status: "no-conversation" };
+  const route = spaces.get(phone);
+  if (!route) return { status: "no-conversation" };
+  // Live: reply into the existing direct conversation from the line the user texted
+  // (a Photon shared line can only message people who messaged it first).
+  let s = sender;
+  if (!s) {
+    if (!route.agentUserId) return { status: "no-conversation" };
+    const { liveSender } = await import("./transport");
+    s = liveSender({ spaceId: route.spaceId, agentUserId: route.agentUserId });
+  }
   const text = kind === "estimate-saved" ? `Your verified 2025 estimate is saved. Review it in FirstFunds: ${appUrl("/agents")}` : "";
-  return sendSafely(sender, link.tenant, spaceId, text, `notify:${kind}:${runId}`);
+  return sendSafely(s, link.tenant, route.spaceId, text, `notify:${kind}:${runId}`);
 }
