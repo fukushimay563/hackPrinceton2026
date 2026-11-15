@@ -2,6 +2,7 @@
 import { useApp } from "../store";
 import { buildTutorContext } from "./context";
 import { IS_STATIC } from "../runtime";
+import { authHeaders } from "../supabase/client";
 import { gatherSources } from "./sources";
 import { offlineAnswer, OFFLINE_FALLBACK } from "./offline";
 
@@ -31,7 +32,7 @@ export async function askTutorQuestion(question: string, page: string) {
     }
     const res = await fetch("/api/tutor", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
       body: JSON.stringify({ question: q, context, history }),
     });
     const data = await res.json();

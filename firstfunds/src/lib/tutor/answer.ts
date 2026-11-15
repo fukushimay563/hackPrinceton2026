@@ -6,9 +6,9 @@ import { describeGeminiError, geminiClient, geminiModel, logGeminiRequest } from
 import { gatherSources } from "@/lib/tutor/sources";
 import { offlineAnswer, OFFLINE_FALLBACK } from "@/lib/tutor/offline";
 import type { TutorContext } from "@/lib/tutor/context";
-import { BANKING_TOOL_DECLARATIONS, offlineBankingAnswer, runBankingTool } from "@/lib/banking/copilotTools";
-import { banking, DEMO_BANK_USER } from "@/lib/banking/repository";
-import { syncBanking } from "@/lib/banking/sync";
+import { BANKING_TOOL_DECLARATIONS, isBankingQuestion, offlineBankingAnswer, runBankingTool } from "@/lib/banking/copilotTools";
+import { DEMO_BANK_USER, type BankingData } from "@/lib/banking/repository";
+import { loadBanking } from "@/lib/banking/sync";
 
 export const FINPILOT_SYSTEM = `You are FinPilot, the FirstFunds AI assistant: a friendly, precise financial educator and support agent for young adults getting their first paycheck, first credit card and first tax return. You also help people use the FirstFunds app (Financial Advisor, Tax Assistant, Financial Advisory Academy, accounts and privacy) using the "FinPilot help" sources.
 
@@ -44,8 +44,10 @@ type AnswerOpts = {
   question: string;
   context: TutorContext;
   history?: { role: "user" | "assistant"; content: string }[];
-  /** Read-only access to the demo banking data (web demo only). */
+  /** Read-only access to stored banking data (web only). */
   bankingTools?: boolean;
+  /** Whose banking records the tools read (verified server-side); defaults to the demo profile. */
+  bankUser?: string;
   channel?: "web" | "message";
 };
 
@@ -64,6 +66,19 @@ async function answerCore(opts: AnswerOpts): Promise<FinPilotAnswer> {
   const { question, context } = opts;
   const useBanking = opts.bankingTools ?? true;
   const sources = gatherSources(question);
+  // Persisted banking records, loaded once per question and only if a banking tool needs them.
+  const bankUser = opts.bankUser ?? DEMO_BANK_USER;
+  let bankData: BankingData | null | undefined;
+  const getBank = async () => {
+    if (bankData === undefined) {
+      try {
+        bankData = await loadBanking(bankUser);
+      } catch {
+        bankData = null; // database unavailable: tools say so instead of guessing
+      }
+    }
+    return bankData;
+  };
   const sourceList = sources.map((s) => ({ title: s.title, url: s.url }));
   const ai = geminiClient();
   let fallbackReason: string | undefined;
@@ -80,7 +95,6 @@ async function answerCore(opts: AnswerOpts): Promise<FinPilotAnswer> {
         .map((m) => `${m.role === "user" ? "Student" : "Tutor"}: ${m.content}`)
         .join("\n");
       const prompt = `USER CONTEXT (live numbers from the app, JSON):\n${JSON.stringify(context)}\n\nSOURCES:\n${sourcesBlock}\n\n${history ? `RECENT CONVERSATION:\n${history}\n\n` : ""}QUESTION: ${question}`;
-      if (useBanking && !banking.lastSync(DEMO_BANK_USER)) await syncBanking(DEMO_BANK_USER);
       const config = {
         systemInstruction: FINPILOT_SYSTEM + channelRule,
         temperature: 0.3,
@@ -95,10 +109,19 @@ async function answerCore(opts: AnswerOpts): Promise<FinPilotAnswer> {
         const calls = res.functionCalls;
         const modelTurn = res.candidates?.[0]?.content;
         if (modelTurn) contents.push(modelTurn);
+        const data = await getBank();
         contents.push({
           role: "user",
           parts: calls.map((c) => ({
-            functionResponse: { id: c.id, name: c.name ?? "", response: { output: runBankingTool(DEMO_BANK_USER, c.name ?? "", (c.args ?? {}) as Record<string, unknown>) } },
+            functionResponse: {
+              id: c.id,
+              name: c.name ?? "",
+              response: {
+                output: data
+                  ? runBankingTool(data, bankUser, c.name ?? "", (c.args ?? {}) as Record<string, unknown>)
+                  : { error: "Stored banking data is temporarily unavailable (database error). Do not guess any figures." },
+              },
+            },
           })),
         });
         res = await ai.models.generateContent({ model, contents, config });
@@ -111,9 +134,10 @@ async function answerCore(opts: AnswerOpts): Promise<FinPilotAnswer> {
     }
   }
 
-  if (useBanking) {
-    if (!banking.lastSync(DEMO_BANK_USER)) await syncBanking(DEMO_BANK_USER);
-    const bankingAnswer = offlineBankingAnswer(DEMO_BANK_USER, question);
+  if (useBanking && isBankingQuestion(question)) {
+    const data = await getBank();
+    if (!data) return { answer: "I can't reach your stored banking data right now, so I won't guess any numbers. Please try again in a moment.", sources: [], mode: "offline", fallbackReason };
+    const bankingAnswer = offlineBankingAnswer(data, bankUser, question);
     if (bankingAnswer) return { answer: bankingAnswer, sources: [], mode: "offline", fallbackReason };
   }
   const answer = offlineAnswer(question, context, sources);

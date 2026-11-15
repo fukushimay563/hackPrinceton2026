@@ -27,3 +27,19 @@ export function getSupabase(): SupabaseClient | null {
   }
   return client;
 }
+
+/**
+ * Authorization header for our own API routes when signed in, so the server can verify the
+ * session and return only this user's records. Empty when signed out (demo profile).
+ */
+export async function authHeaders(): Promise<Record<string, string>> {
+  const sb = getSupabase();
+  if (!sb) return {};
+  try {
+    const { data } = await sb.auth.getSession();
+    const token = data.session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}

@@ -110,6 +110,8 @@ export type SyncReport = {
   provider: Provider;
   live: boolean; // true only when data actually came from the Nessie API
   nessieStatus: NessieStatus;
+  /** Where the records are stored: "supabase" (persistent) or "memory" (one server instance). */
+  storage?: "memory" | "supabase";
   /** Per-request diagnostics (endpoint template, HTTP status, record count). */
   requests: { endpoint: string; status: number | null; count: number | null }[];
   label: string;

@@ -5,19 +5,25 @@
 import { connection } from "next/server";
 import { MAYA_TRANSACTIONS, type Transaction } from "@/lib/demo/maya";
 import { activeRows } from "@/lib/banking/overview";
-import { banking, DEMO_BANK_USER } from "@/lib/banking/repository";
-import { syncBanking } from "@/lib/banking/sync";
+import { bankingErrorResponse, resolveBankingUser } from "@/lib/banking/http";
+import { loadBanking } from "@/lib/banking/sync";
 
-export async function GET() {
+export async function GET(req: Request) {
   await connection(); // read env at request time, not build time
-  const userId = DEMO_BANK_USER;
-  if (!banking.lastSync(userId)) await syncBanking(userId);
-  const last = banking.lastSync(userId);
-  const { provider, rows } = activeRows(userId);
-  const cardIds = new Set(banking.accounts(userId).filter((a) => a.type === "Credit Card").map((a) => a.id));
+  const who = await resolveBankingUser(req);
+  if (who instanceof Response) return who;
+  let data;
+  try {
+    data = await loadBanking(who.userId);
+  } catch (e) {
+    return bankingErrorResponse(e, "GET /api/nessie");
+  }
+  const last = data.lastSync;
+  const { provider, rows } = activeRows(data);
+  const cardIds = new Set(data.accounts.filter((a) => a.type === "Credit Card").map((a) => a.id));
   const purchases = rows.filter((t) => provider === "nessie" && t.flow === "expense" && t.kind === "purchase" && cardIds.has(t.accountId) && t.date);
   const nessieStatus = last?.nessieStatus ?? null;
-  const cardAccount = provider === "nessie" ? banking.accounts(userId).find((a) => a.provider === "nessie" && a.type === "Credit Card") : undefined;
+  const cardAccount = provider === "nessie" ? data.accounts.find((a) => a.provider === "nessie" && a.type === "Credit Card") : undefined;
   const card = cardAccount ? { nickname: cardAccount.nickname, balance: cardAccount.balance, available: cardAccount.available, creditLimit: cardAccount.creditLimit, last4: cardAccount.last4 } : null;
   // No real sandbox card purchases → the page keeps its bundled sample data, labelled "Sample data".
   if (!purchases.length) return Response.json({ source: "demo", transactions: MAYA_TRANSACTIONS, nessieStatus, card, note: last?.label });
