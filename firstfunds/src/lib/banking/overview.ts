@@ -17,8 +17,12 @@ export function bankingOverview(userId: string, opts: { month?: string; filters?
   const month = opts.month && months.includes(opts.month) ? opts.month : months[months.length - 1] ?? null;
   const accounts = banking.accounts(userId).filter((a) => a.provider === provider);
   return {
-    source: last ? { provider: last.provider, live: last.live, label: last.label, syncedAt: last.syncedAt, warnings: last.warnings, skipped: last.skipped.length } : null,
+    source: last
+      ? { provider: last.provider, live: last.live, nessieStatus: last.nessieStatus, label: last.label, syncedAt: last.syncedAt, warnings: last.warnings, skipped: last.skipped.length }
+      : null,
     accounts,
+    bills: banking.bills(userId).filter((b) => b.provider === provider),
+    loans: banking.loans(userId).filter((l) => l.provider === provider),
     months,
     month,
     summary: month ? monthlySummary(rows, month) : null,

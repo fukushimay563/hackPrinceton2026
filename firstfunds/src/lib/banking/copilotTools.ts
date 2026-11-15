@@ -36,6 +36,11 @@ export const BANKING_TOOL_DECLARATIONS = [
     parametersJsonSchema: { type: "object", properties: {} },
   },
   {
+    name: "accounts_bills_loans",
+    description: "List the user's sandbox accounts (type, nickname, balance, available, credit limit, last 4 digits), bills (payee, amount, status, next date) and loans (type, amount, monthly payment, status) exactly as stored.",
+    parametersJsonSchema: { type: "object", properties: {} },
+  },
+  {
     name: "budget_progress",
     description: "Compare each category's spending this month with the user's budget limits.",
     parametersJsonSchema: { type: "object", properties: { month: { type: "string" } } },
@@ -48,9 +53,21 @@ const NAMES = new Set<string>(BANKING_TOOL_DECLARATIONS.map((d) => d.name));
 export function runBankingTool(userId: string, name: string, args: Record<string, unknown> = {}) {
   if (!NAMES.has(name)) return { error: `Unknown tool ${name}` };
   const last = banking.lastSync(userId);
-  const { rows } = activeRows(userId);
+  const { provider, rows } = activeRows(userId);
+  if (last?.nessieStatus === "empty")
+    return { error: "The Capital One Nessie sandbox is connected but has no accounts yet, so there is no banking data to analyze. This is an empty sandbox, not an error. Don't invent figures." };
+  const dataSource = last ? { provider: last.provider, live: last.live, nessieStatus: last.nessieStatus, label: last.label } : null;
+  if (last && name === "accounts_bills_loans") {
+    const accounts = banking.accounts(userId).filter((a) => a.provider === provider);
+    return {
+      dataSource,
+      kind: "verified stored records",
+      accounts: accounts.map((a) => ({ type: a.type, nickname: a.nickname, balance: a.balance, available: a.available, creditLimit: a.creditLimit, last4: a.last4 })),
+      bills: banking.bills(userId).filter((b) => b.provider === provider).map(({ payee, nickname, status, amount, upcomingPaymentDate, recurringDay }) => ({ payee, nickname, status, amount, upcomingPaymentDate, recurringDay })),
+      loans: banking.loans(userId).filter((l) => l.provider === provider).map(({ type, status, description, amount, monthlyPayment, creditScore }) => ({ type, status, description, amount, monthlyPayment, creditScore })),
+    };
+  }
   if (!last || !rows.length) return { error: "No banking data has been imported yet. The user can import demo data on the My Budget page." };
-  const dataSource = { provider: last.provider, live: last.live, label: last.label };
   const months = availableMonths(rows);
   const m = typeof args.month === "string" && months.includes(args.month) ? args.month : months[months.length - 1];
   const review = (month?: string) => rows.filter((t) => t.needsReview && (!month || t.date?.startsWith(month))).length;
@@ -77,6 +94,8 @@ export function runBankingTool(userId: string, name: string, args: Record<string
       return { dataSource, kind: "calculated from stored rows", month: m, result: spendingByCategory(rows, m), rowsNeedingReview: review(m) };
     case "recurring_expenses":
       return { dataSource, kind: "estimate: pattern-based candidates, not confirmed", result: recurringCandidates(rows) };
+    case "accounts_bills_loans":
+      return { error: "No banking data has been imported yet." };
     case "budget_progress": {
       const budgets = banking.budgets(userId);
       return { dataSource, kind: "calculated from stored rows and the user's budget limits", month: m, budgetsAreDemoDefaults: userId === "tenant_demo_maya", result: budgetProgress(rows, m, budgets) };
@@ -90,8 +109,8 @@ const money = (n: number) => `$${n.toFixed(2)}`;
 export function offlineBankingAnswer(userId: string, question: string): string | null {
   if (!/\b(spend|spent|spending|budget|income|expense|transaction|recurring|subscription|cash ?flow|categor|bank|purchase|deposit)/i.test(question)) return null;
   const s = runBankingTool(userId, "monthly_income_expenses") as Record<string, unknown>;
-  if ("error" in s) return String(s.error);
-  const src = (s.dataSource as { label: string }).label;
+  if ("error" in s) return String(s.error).replace(" Don't invent figures.", "");
+  const src = (s.dataSource as { label: string } | null)?.label ?? "stored data";
   const r = s.result as ReturnType<typeof monthlySummary>;
   const cats = (runBankingTool(userId, "spending_by_category") as { result: ReturnType<typeof spendingByCategory> }).result.slice(0, 3);
   const rec = (runBankingTool(userId, "recurring_expenses") as { result: ReturnType<typeof recurringCandidates> }).result;

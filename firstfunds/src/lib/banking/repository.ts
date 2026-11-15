@@ -7,14 +7,21 @@
 import { store } from "../agents/store";
 import { merchantKey, type Corrections } from "./normalize";
 import type { Budgets } from "./analytics";
-import type { BankAccount, BankTransaction, BudgetCategory, SyncReport } from "./types";
+import type { BankAccount, BankBill, BankLoan, BankTransaction, BudgetCategory, Provider, SyncReport } from "./types";
 
 export const DEMO_BANK_USER = "tenant_demo_maya";
 
 /** Demo budgets for the demo user only. Labelled as such in the UI; users can change them. */
 export const DEMO_BUDGETS: Budgets = { Food: 200, Groceries: 250, Shopping: 150, Transport: 120, Subscriptions: 40, Entertainment: 80, Bills: 1000 };
 
-type UserData = { accounts: Map<string, BankAccount>; txs: Map<string, BankTransaction>; budgets: Budgets | null; lastSync: SyncReport | null };
+type UserData = {
+  accounts: Map<string, BankAccount>;
+  txs: Map<string, BankTransaction>;
+  bills: BankBill[];
+  loans: BankLoan[];
+  budgets: Budgets | null;
+  lastSync: SyncReport | null;
+};
 
 // Fields owned by the provider. A sync may update these; it never touches user-owned fields.
 const PROVIDER_FIELDS = ["date", "amount", "direction", "description", "merchant", "status", "accountId", "kind"] as const;
@@ -25,7 +32,7 @@ class BankingRepository {
   private u(userId: string): UserData {
     if (!userId) throw new Error("userId required");
     let d = this.users.get(userId);
-    if (!d) this.users.set(userId, (d = { accounts: new Map(), txs: new Map(), budgets: null, lastSync: null }));
+    if (!d) this.users.set(userId, (d = { accounts: new Map(), txs: new Map(), bills: [], loans: [], budgets: null, lastSync: null }));
     return d;
   }
 
@@ -59,6 +66,38 @@ class BankingRepository {
       else unchanged++;
     }
     return { inserted, updated, unchanged };
+  }
+
+  /**
+   * After a SUCCESSFUL provider read, drop that provider's accounts and rows that the
+   * provider no longer returns (e.g. the sandbox was cleared), so stale records are never
+   * shown as current. User category rules live in personalization memory and survive.
+   */
+  pruneProvider(userId: string, provider: Provider, keepAccountIds: Set<string>, keepTxIds: Set<string>): number {
+    const d = this.u(userId);
+    let removed = 0;
+    for (const [id, a] of d.accounts) if (a.provider === provider && !keepAccountIds.has(id)) d.accounts.delete(id);
+    for (const [id, t] of d.txs)
+      if (t.provider === provider && !keepTxIds.has(id)) {
+        d.txs.delete(id);
+        removed++;
+      }
+    return removed;
+  }
+
+  /** Bills and loans are replaced wholesale on each successful read (read-only, no user fields). */
+  setObligations(userId: string, provider: Provider, bills: BankBill[], loans: BankLoan[]) {
+    const d = this.u(userId);
+    d.bills = [...d.bills.filter((b) => b.provider !== provider), ...bills];
+    d.loans = [...d.loans.filter((l) => l.provider !== provider), ...loans];
+  }
+
+  bills(userId: string): BankBill[] {
+    return [...this.u(userId).bills];
+  }
+
+  loans(userId: string): BankLoan[] {
+    return [...this.u(userId).loans];
   }
 
   accounts(userId: string): BankAccount[] {
