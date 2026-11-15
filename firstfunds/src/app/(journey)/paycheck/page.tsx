@@ -9,10 +9,10 @@ import { askTutorQuestion } from "@/lib/tutor/ask";
 import { usd } from "@/lib/format";
 import { Button, Card, InfoTip, PageHeader, SliderField, Stat } from "@/components/ui";
 import { AdvisorTabs } from "@/components/AppShell";
+import { HometownTaxSelector } from "@/components/HometownTaxSelector";
 
 // Validated categorical order (dataviz validator, light surface).
-// Take-home pay is the money signal (highlighter); deductions are monochrome steps.
-const COLORS = ["#e4f222", "#1a1919", "#555352", "#8a8887", "#bdbbb9"];
+const COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#9b51e0", "#6250d6"];
 
 const FREQ_LABEL: Record<PayFrequency, string> = {
   weekly: "Weekly",
@@ -26,13 +26,51 @@ export default function PaycheckPage() {
   const p = computePaycheck(paycheck);
   const monthlyNet = (p.net * PERIODS[paycheck.frequency]) / 12;
 
+  const hasLocal = p.cityTax > 0 || p.countyTax > 0;
+  const localTaxTotal = p.cityTax + p.countyTax;
+
+  const stateLabel = p.crossBorder?.isDifferentState
+    ? `State tax (${p.crossBorder.work.state}/${p.crossBorder.residence.state})`
+    : `State tax (${p.location.state})`;
+
   const slices = [
     { name: "Take-home pay", value: p.net, tip: "What lands in your bank account." },
-    { name: "Federal income tax", value: p.federal, tip: "A prepayment toward your yearly income tax. Settled when you file — this is where refunds come from." },
-    { name: "Social Security", value: p.socialSecurity, tip: "6.2% of wages. Funds retirement and disability benefits. Not refundable." },
-    { name: "State income tax", value: p.state, tip: "A rough flat estimate. State rules vary a lot." },
+    {
+      name: "Federal income tax",
+      value: p.federal,
+      tip: "A prepayment toward your yearly income tax. Settled when you file — this is where refunds come from.",
+    },
+    {
+      name: "Social Security",
+      value: p.socialSecurity,
+      tip: "6.2% of wages. Funds retirement and disability benefits. Not refundable.",
+    },
+    ...(hasLocal
+      ? [
+          {
+            name: stateLabel,
+            value: p.stateTax,
+            tip: p.crossBorder?.stateTaxExplanation || `Income tax paid to ${p.location.stateName}.`,
+          },
+          {
+            name: "Local income tax",
+            value: localTaxTotal,
+            tip:
+              p.crossBorder?.cityTaxExplanation ||
+              `County and city/municipal wage taxes (${(p.location.countyRatePct + p.location.cityRatePct).toFixed(2)}%).`,
+          },
+        ]
+      : [
+          {
+            name: stateLabel,
+            value: p.state,
+            tip:
+              p.crossBorder?.stateTaxExplanation ||
+              `Income tax paid to ${p.location.stateName} (${p.location.stateRatePct}%). Some states (like TX and FL) have no wage tax.`,
+          },
+        ]),
     { name: "Medicare", value: p.medicare, tip: "1.45% of wages. Funds health coverage at 65+. Not refundable." },
-  ];
+  ].filter((s) => s.value > 0 || s.name === "Take-home pay");
 
   const budget = [
     { label: "Needs", pct: 50, eg: "rent, groceries, phone, transport" },
@@ -60,7 +98,7 @@ export default function PaycheckPage() {
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[390px_1fr]">
         <Card className="h-fit space-y-6">
           <SliderField
             label="Gross pay per paycheck"
@@ -108,16 +146,34 @@ export default function PaycheckPage() {
               ))}
             </select>
           </div>
-          <SliderField
-            label="State tax estimate"
-            value={paycheck.stateTaxRatePct}
-            onChange={(v) => setPaycheck({ stateTaxRatePct: Math.max(0, Math.min(15, v)) })}
-            min={0}
-            max={10}
-            step={0.1}
-            suffix="%"
-            tip="A flat approximation. Some states (like Texas and Florida) have no wage income tax."
+
+          {/* Residence & Workplace Cross-Border Tax Engine */}
+          <HometownTaxSelector
+            residenceHometown={paycheck.hometown || profile?.city || "Trenton, NJ"}
+            workHometown={paycheck.workHometown || "New York, NY"}
+            isDifferentWorkLocation={paycheck.isDifferentWorkLocation ?? false}
+            crossBorder={p.crossBorder}
+            annualGross={p.annualGross}
+            filingStatus={paycheck.filingStatus}
+            manualRatePct={paycheck.stateTaxRatePct}
+            isManualOverride={paycheck.isManualOverride}
+            onChange={({
+              residenceHometown,
+              workHometown,
+              isDifferentWorkLocation,
+              effectiveRatePct,
+              isManual,
+            }) => {
+              setPaycheck({
+                hometown: residenceHometown,
+                workHometown,
+                isDifferentWorkLocation,
+                stateTaxRatePct: effectiveRatePct,
+                isManualOverride: isManual,
+              });
+            }}
           />
+
           <p className="text-xs text-ink-3">
             Federal withholding here is an estimate. Your real amount depends on your Form W-4 and IRS Publication 15-T.
           </p>
@@ -126,7 +182,11 @@ export default function PaycheckPage() {
         <div className="space-y-6">
           <Card>
             <div className="grid items-center gap-6 md:grid-cols-[240px_1fr]">
-              <div className="relative h-60" role="img" aria-label={`Donut chart: take-home ${usd(p.net, true)} of ${usd(p.gross, true)} gross.`}>
+              <div
+                className="relative h-60"
+                role="img"
+                aria-label={`Donut chart: take-home ${usd(p.net, true)} of ${usd(p.gross, true)} gross.`}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -141,7 +201,7 @@ export default function PaycheckPage() {
                       animationDuration={500}
                     >
                       {slices.map((s, i) => (
-                        <Cell key={s.name} fill={COLORS[i]} />
+                        <Cell key={s.name} fill={COLORS[i % COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip
@@ -162,13 +222,15 @@ export default function PaycheckPage() {
                 {slices.map((s, i) => (
                   <li key={s.name} className="flex items-center justify-between gap-3 text-sm">
                     <span className="flex items-center gap-2">
-                      <span className="h-3 w-3 rounded-sm" style={{ background: COLORS[i] }} />
+                      <span className="h-3 w-3 rounded-sm" style={{ background: COLORS[i % COLORS.length] }} />
                       {s.name}
                       <InfoTip label={`About ${s.name}`}>{s.tip}</InfoTip>
                     </span>
                     <span className="num font-semibold">
                       {usd(s.value, true)}{" "}
-                      <span className="font-normal text-ink-3">· {((s.value / (p.gross || 1)) * 100).toFixed(1)}%</span>
+                      <span className="font-normal text-ink-3">
+                        · {((s.value / (p.gross || 1)) * 100).toFixed(1)}%
+                      </span>
                     </span>
                   </li>
                 ))}
@@ -186,6 +248,32 @@ export default function PaycheckPage() {
                 sub={`${(((p.annualGross - p.annualNet) / (p.annualGross || 1)) * 100).toFixed(1)}% of gross`}
               />
             </div>
+
+            {/* Commuter Cross-Border Breakdown Callout */}
+            {p.crossBorder && !p.crossBorder.isSameLocation ? (
+              <div className="mt-4 rounded-xl bg-paper/70 p-3 text-xs text-ink-2 border border-line/70 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-ink-1">
+                    📍 Commute: {p.crossBorder.residence.city}, {p.crossBorder.residence.state} → {p.crossBorder.work.city}, {p.crossBorder.work.state}
+                  </span>
+                  <span className="rounded bg-white px-1.5 py-0.5 text-2xs font-semibold text-brand border border-line/60">
+                    {p.crossBorder.summaryBadge}
+                  </span>
+                </div>
+                <p className="text-ink-2 leading-relaxed">{p.crossBorder.stateTaxExplanation}</p>
+                {p.crossBorder.cityTaxExplanation && (
+                  <p className="text-ink-3 leading-relaxed">{p.crossBorder.cityTaxExplanation}</p>
+                )}
+              </div>
+            ) : (
+              hasLocal && (
+                <div className="mt-4 rounded-xl bg-paper/60 p-3 text-xs text-ink-2 border border-line/60">
+                  <span className="font-semibold text-ink-1">📍 Local breakdown for {p.location.hometown}:</span>{" "}
+                  State tax is <b>{usd(p.stateTax * PERIODS[paycheck.frequency])}/yr</b> ({p.location.stateRatePct}%), and local (county + city) tax is{" "}
+                  <b>{usd(localTaxTotal * PERIODS[paycheck.frequency])}/yr</b> ({(p.location.countyRatePct + p.location.cityRatePct).toFixed(2)}%).
+                </div>
+              )
+            )}
           </Card>
 
           <Card>

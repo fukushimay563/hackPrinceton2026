@@ -52,7 +52,8 @@ const BLANK_PAYCHECK: PaycheckInputs = {
   grossPerPeriod: 1500,
   frequency: "biweekly",
   filingStatus: "single",
-  stateTaxRatePct: 3,
+  stateTaxRatePct: 2.5,
+  hometown: "Trenton, NJ",
 };
 
 const BLANK_CARD: CardInputs = {

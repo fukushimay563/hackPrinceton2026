@@ -47,6 +47,7 @@ export const MAYA_PAYCHECK: PaycheckInputs = {
   frequency: "biweekly",
   filingStatus: "single",
   stateTaxRatePct: 2.5,
+  hometown: "Trenton, NJ",
 };
 
 export const MAYA_TRANSACTIONS: Transaction[] = [
