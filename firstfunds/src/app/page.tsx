@@ -1,153 +1,151 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, FileText, GraduationCap, LineChart, MessageCircle, ShieldCheck, Sparkles } from "lucide-react";
+import { motion } from "framer-motion";
+import { ArrowRight, BadgeCheck, FileUp, GraduationCap, LineChart, Lock, MessageCircle, Sparkles, FileText } from "lucide-react";
 import { Logo } from "@/components/AppShell";
-import { Button, Card } from "@/components/ui";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { Card } from "@/components/ui";
 import { useApp } from "@/lib/store";
-import { simulate } from "@/lib/finance/credit";
 import { computeTax } from "@/lib/finance/tax2025";
 import { computePaycheck } from "@/lib/finance/paycheck";
-import { MAYA_CARD, MAYA_PAYCHECK, MAYA_TAX } from "@/lib/demo/maya";
+import { MAYA_PAYCHECK, MAYA_TAX } from "@/lib/demo/maya";
 import { ALL_LESSONS } from "@/lib/academy/lessons";
-import { durationLong, usd } from "@/lib/format";
+import { usd } from "@/lib/format";
 
 const mayaPay = computePaycheck(MAYA_PAYCHECK);
-const mayaMin = simulate(MAYA_CARD, "minimum");
 const mayaTax = computeTax(MAYA_TAX);
 
-const FEATURES = [
-  {
-    href: "/advisor",
-    icon: LineChart,
-    tag: "Budget & credit",
-    title: "Financial Advisor",
-    body: "See where your paycheck goes and what a credit card balance really costs, with next steps from your own numbers.",
-    demo: true,
-  },
-  {
-    href: "/taxes",
-    icon: FileText,
-    tag: "2025 returns",
-    title: "Tax Assistant",
-    body: "Add your W-2 and answer only what it can't tell us. A reviewable estimate in about 3 minutes, with a source for every number.",
-  },
-  {
-    href: "/academy",
-    icon: GraduationCap,
-    tag: "Only on FirstFunds",
-    title: "Financial Advisory Academy",
-    body: `${ALL_LESSONS.length} bite-size lessons that teach first-time taxpayers W-2s, withholding, brackets and filing, with hands-on examples and quizzes.`,
-    highlight: true,
-  },
-  {
-    href: "/finpilot",
-    icon: MessageCircle,
-    tag: "AI assistant",
-    title: "FinPilot",
-    body: "Ask anything about money, taxes or the app. It explains your actual math and cites IRS and CFPB sources.",
-  },
-];
+const rise = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
 export default function Home() {
   const router = useRouter();
   const { loadDemo, profile } = useApp();
 
-  const open = (href: string, demo?: boolean) => {
-    if (demo && !profile) loadDemo();
-    router.push(href);
+  const startDemo = () => {
+    if (!profile) loadDemo();
+    router.push("/advisor");
   };
+
+  const actions = [
+    {
+      icon: MessageCircle,
+      title: "Ask a question",
+      body: "Get a plain-English answer about taxes or money, with sources. Nothing to upload.",
+      onClick: () => router.push("/finpilot"),
+      primary: true,
+    },
+    {
+      icon: FileUp,
+      title: "Upload a tax document",
+      body: "Add your W-2 and get a reviewable 2025 estimate. We only ask what it can't tell us.",
+      onClick: () => router.push("/taxes"),
+    },
+    {
+      icon: Sparkles,
+      title: "Explore with demo data",
+      body: "See everything with Maya, a sample 20-year-old. No account, no personal info.",
+      onClick: startDemo,
+    },
+  ];
 
   return (
     <div className="min-h-screen">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
         <Logo />
-        <Button variant="secondary" onClick={() => open("/advisor", true)}>
-          Try the demo
-        </Button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Link href="/finpilot" className="rounded-full border border-line bg-card px-3.5 py-2 text-sm font-semibold text-ink-2 hover:text-ink">
+            Open the advisor
+          </Link>
+        </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-4">
-        <section className="grid items-center gap-10 py-10 md:grid-cols-[1.1fr_1fr] md:py-14">
+        <motion.section
+          initial="hidden"
+          animate="show"
+          transition={{ staggerChildren: 0.06 }}
+          className="grid items-center gap-10 pt-8 pb-12 lg:grid-cols-[1.15fr_1fr] lg:pt-14"
+        >
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1 text-xs font-semibold text-ink-2">
-              <Sparkles size={14} className="text-brand" /> For your first paycheck, first card, first tax return
-            </div>
-            <h1 className="mt-5 text-4xl leading-[1.05] font-semibold tracking-tight text-ink sm:text-6xl">
-              Money gets real fast.
-              <br />
-              <span className="text-brand">Understand it first.</span>
-            </h1>
-            <p className="mt-5 max-w-xl text-lg text-ink-2">
-              FirstFunds helps young adults budget, handle credit, and file a first tax return, and teaches the why along the way.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Button className="px-5 py-3 text-base" onClick={() => open("/advisor", true)}>
-                <Sparkles size={18} /> Try Maya&apos;s demo
-              </Button>
-              <Button variant="secondary" className="px-5 py-3 text-base" onClick={() => router.push("/academy")}>
-                <GraduationCap size={18} /> Start learning
-              </Button>
-            </div>
-            <p className="mt-4 flex items-center gap-2 text-sm text-ink-3">
-              <ShieldCheck size={16} /> No sign-up needed. Nothing is saved after you close the tab unless you sign in.
-            </p>
+            <motion.div variants={rise} className="inline-flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1 text-xs font-semibold text-ink-2">
+              <BadgeCheck size={14} className="text-brand" /> AI financial &amp; tax advisor for first-timers
+            </motion.div>
+            <motion.h1 variants={rise} className="mt-5 text-4xl leading-[1.04] font-semibold tracking-tight text-balance text-ink sm:text-6xl">
+              Your finances, <span className="text-brand">finally making sense.</span>
+            </motion.h1>
+            <motion.p variants={rise} className="mt-5 max-w-xl text-lg text-ink-2">
+              Get clarity on your taxes, understand your finances, and find your next best move with an AI-powered financial advisor.
+            </motion.p>
+
+            <motion.div variants={rise} className="mt-8 grid gap-3 sm:grid-cols-3">
+              {actions.map((a) => (
+                <button
+                  key={a.title}
+                  type="button"
+                  onClick={a.onClick}
+                  className={`group lift flex flex-col rounded-2xl border p-4 text-left ${a.primary ? "border-ink bg-ink text-paper dark:border-brand/40 dark:bg-brand-soft dark:text-ink" : "surface border-line text-ink hover:border-brand/50"}`}
+                >
+                  <span className={`grid h-9 w-9 place-items-center rounded-xl ${a.primary ? "bg-paper/10 text-mint dark:bg-brand dark:text-on-brand" : "bg-brand-soft text-brand"}`}>
+                    <a.icon size={18} />
+                  </span>
+                  <span className="mt-3 flex items-center gap-1 font-semibold">
+                    {a.title} <ArrowRight size={14} className="transition-transform duration-150 group-hover:translate-x-0.5" />
+                  </span>
+                  <span className={`mt-1 text-sm ${a.primary ? "text-paper/75 dark:text-ink-2" : "text-ink-2"}`}>{a.body}</span>
+                </button>
+              ))}
+            </motion.div>
+
+            <motion.p variants={rise} className="mt-5 flex items-start gap-2 text-sm text-ink-3">
+              <Lock size={15} className="mt-0.5 shrink-0" />
+              No sign-up. We ask for information only when a task needs it, and tell you why. Nothing is saved after you close the tab unless you sign in.
+            </motion.p>
           </div>
 
-          <Card className="relative overflow-hidden">
-            <div className="absolute -top-20 -right-20 h-56 w-56 rounded-full bg-mint/40 blur-3xl" />
-            <div className="relative">
-              <div className="flex items-center gap-3">
-                <div className="grid h-11 w-11 place-items-center rounded-full bg-brand-soft text-lg font-bold text-brand-2">M</div>
-                <div>
-                  <div className="font-semibold">Maya, 20</div>
-                  <div className="text-sm text-ink-3">First job · first credit card · first tax return</div>
+          <motion.div variants={rise}>
+            <Card className="relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-full bg-brand-soft font-bold text-brand-2">M</div>
+                  <div>
+                    <div className="font-semibold">Maya, 20</div>
+                    <div className="text-sm text-ink-3">First job · first card · first return</div>
+                  </div>
                 </div>
+                <span className="rounded-full bg-warn-soft px-2.5 py-0.5 text-xs font-semibold text-warn">Demo data</span>
               </div>
-              <dl className="mt-6 grid grid-cols-2 gap-4">
-                <div className="rounded-xl bg-paper p-4">
-                  <dt className="text-xs text-ink-3">Gross paycheck</dt>
-                  <dd className="num text-xl font-semibold">{usd(mayaPay.gross)}</dd>
-                </div>
-                <div className="rounded-xl bg-paper p-4">
-                  <dt className="text-xs text-ink-3">Take-home</dt>
-                  <dd className="num text-xl font-semibold text-brand">{usd(mayaPay.net, true)}</dd>
-                </div>
-                <div className="col-span-2 rounded-xl bg-debt-soft p-4">
-                  <dt className="text-xs text-debt">$600 on her card, minimum payments only</dt>
-                  <dd className="num mt-1 text-xl font-semibold text-debt">
-                    {durationLong(mayaMin.months)} · {usd(mayaMin.totalInterest)} interest
-                  </dd>
-                </div>
-                <div className="col-span-2 rounded-xl bg-brand-soft p-4">
-                  <dt className="text-xs text-brand-2">2025 tax return estimate</dt>
-                  <dd className="num mt-1 text-xl font-semibold text-brand-2">{usd(mayaTax.refund)} refund</dd>
-                </div>
-              </dl>
-            </div>
-          </Card>
-        </section>
+              <div className="mt-5 space-y-3">
+                <PreviewRow label="Take-home per paycheck" value={usd(mayaPay.net, true)} sub={`of ${usd(mayaPay.gross)} gross`} />
+                <PreviewRow label="2025 federal tax estimate" value={usd(mayaTax.tax)} sub="calculated from the IRS tables" />
+                <PreviewRow label="Expected refund" value={usd(mayaTax.refund)} sub="withheld minus estimated tax" tone="good" />
+              </div>
+              <div className="mt-5 rounded-xl border border-line bg-sunken p-3 text-sm text-ink-2">
+                <span className="font-semibold text-ink">How estimates are checked:</span> numbers come from deterministic tax math, then a verification step re-checks them before you see them.
+              </div>
+            </Card>
+          </motion.div>
+        </motion.section>
 
         <section className="pb-16">
-          <h2 className="text-2xl font-semibold tracking-tight">Four ways FirstFunds helps</h2>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            {FEATURES.map((f) => (
+          <h2 className="text-sm font-semibold tracking-widest text-ink-3 uppercase">Everything in one place</h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { href: "/advisor", icon: LineChart, title: "Financial Advisor", body: "Paycheck, budget and credit card, with next steps.", demo: true },
+              { href: "/taxes", icon: FileText, title: "Tax Assistant", body: "A reviewable 2025 estimate with a source for every number." },
+              { href: "/academy", icon: GraduationCap, title: "Academy", body: `${ALL_LESSONS.length} short lessons on W-2s, withholding and filing.` },
+              { href: "/finpilot", icon: MessageCircle, title: "FinPilot", body: "Ask anything. It explains your actual math." },
+            ].map((f) => (
               <button
                 key={f.href}
-                onClick={() => open(f.href, f.demo)}
-                className={`group rounded-2xl border p-6 text-left transition-colors ${f.highlight ? "border-brand bg-brand-soft/60 hover:bg-brand-soft" : "border-line bg-white hover:border-brand"}`}
+                type="button"
+                onClick={() => (f.demo ? startDemo() : router.push(f.href))}
+                className="surface lift group rounded-2xl border border-line p-5 text-left hover:border-brand/40"
               >
-                <div className="flex items-center justify-between">
-                  <span className={`grid h-11 w-11 place-items-center rounded-xl ${f.highlight ? "bg-brand text-white" : "bg-paper text-brand"}`}>
-                    <f.icon size={22} />
-                  </span>
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${f.highlight ? "bg-brand text-white" : "bg-paper text-ink-2"}`}>{f.tag}</span>
-                </div>
-                <h3 className="mt-4 text-lg font-semibold">{f.title}</h3>
+                <f.icon size={20} className="text-brand" />
+                <div className="mt-3 font-semibold">{f.title}</div>
                 <p className="mt-1 text-sm text-ink-2">{f.body}</p>
-                <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-brand">
-                  Open <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
-                </span>
               </button>
             ))}
           </div>
@@ -159,6 +157,18 @@ export default function Home() {
           How we calculate
         </Link>
       </footer>
+    </div>
+  );
+}
+
+function PreviewRow({ label, value, sub, tone }: { label: string; value: string; sub: string; tone?: "good" }) {
+  return (
+    <div className="flex items-end justify-between gap-3 border-b border-line pb-3 last:border-0">
+      <div>
+        <div className="text-sm text-ink-2">{label}</div>
+        <div className="text-xs text-ink-3">{sub}</div>
+      </div>
+      <div className={`num text-xl font-semibold ${tone === "good" ? "text-brand" : "text-ink"}`}>{value}</div>
     </div>
   );
 }

@@ -119,7 +119,7 @@ export default function PaycheckPage() {
               id="freq"
               value={paycheck.frequency}
               onChange={(e) => setPaycheck({ frequency: e.target.value as PayFrequency })}
-              className="mt-2 w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm"
+              className="mt-2 w-full rounded-xl border border-line bg-card px-3 py-2.5 text-sm"
             >
               {Object.entries(FREQ_LABEL).map(([k, v]) => (
                 <option key={k} value={k}>
@@ -137,7 +137,7 @@ export default function PaycheckPage() {
               id="fs"
               value={paycheck.filingStatus}
               onChange={(e) => setPaycheck({ filingStatus: e.target.value as FilingStatus })}
-              className="mt-2 w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm"
+              className="mt-2 w-full rounded-xl border border-line bg-card px-3 py-2.5 text-sm"
             >
               {(["single", "mfj", "hoh"] as FilingStatus[]).map((k) => (
                 <option key={k} value={k}>

@@ -1,32 +1,70 @@
 @import "tailwindcss";
 
+/* `dark:` follows the explicit theme attribute set before first paint */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  --color-ink: #0e1a24;
-  --color-ink-2: #3b4a57;
-  --color-ink-3: #6b7a87;
-  --color-line: #e3e8e4;
-  --color-paper: #f4f6f2;
+  /* FirstFunds palette: deep navy ink, warm off-white paper, muted teal brand. */
+  --color-ink: #0f1d2e;
+  --color-ink-2: #3a4859;
+  --color-ink-3: #5f6c7d;
+  --color-line: #e5e0d6;
+  --color-paper: #f7f4ee;
   --color-card: #ffffff;
+  --color-sunken: #f1ede5;
 
-  --color-brand: #17795a;
-  --color-brand-2: #0f5c44;
-  --color-brand-soft: #e2f2ea;
-  --color-mint: #9be2c3;
+  --color-brand: #1d6f66;
+  --color-brand-2: #135148;
+  --color-brand-soft: #e0eeeb;
+  --color-mint: #9fd6ca;
+  --color-on-brand: #ffffff;
 
-  --color-debt: #d0453a;
-  --color-debt-soft: #fbe8e6;
-  --color-warn: #b7790d;
-  --color-warn-soft: #fbf1dc;
-  --color-info: #2f5fd0;
-  --color-info-soft: #e7eefc;
+  --color-debt: #b93d2c;
+  --color-debt-soft: #fae8e4;
+  --color-warn: #8f6206;
+  --color-warn-soft: #f7efdb;
+  --color-info: #2c5aae;
+  --color-info-soft: #e6edf9;
 
   /* Chart series — validated (dataviz validator, light surface): orange, blue, aqua */
   --color-s1: #eb6834;
   --color-s2: #2a78d6;
   --color-s3: #1baf7a;
+
+  --shadow-card: 0 1px 2px rgb(15 29 46 / 0.04), 0 4px 16px -6px rgb(15 29 46 / 0.08);
+  --shadow-lift: 0 2px 4px rgb(15 29 46 / 0.05), 0 14px 32px -12px rgb(15 29 46 / 0.18);
+}
+
+/* Dark mode: same tokens, re-pointed. Chosen explicitly (data-theme) or from the OS. */
+:root[data-theme="dark"] {
+  --color-ink: #e8edf3;
+  --color-ink-2: #b9c4d1;
+  --color-ink-3: #93a0b2;
+  --color-line: #233349;
+  --color-paper: #0b1422;
+  --color-card: #111d2e;
+  --color-sunken: #0e1827;
+  --color-brand: #5fbfb1;
+  --color-brand-2: #8dd5ca;
+  --color-brand-soft: #14302e;
+  --color-mint: #2d6b62;
+  --color-on-brand: #062420;
+  --color-debt: #f08a78;
+  --color-debt-soft: #3a1c19;
+  --color-warn: #e9b65a;
+  --color-warn-soft: #33270f;
+  --color-info: #8fb3f5;
+  --color-info-soft: #172744;
+  /* Chart series re-validated for the dark surface (#111d2e) */
+  --color-s1: #e2622f;
+  --color-s2: #3a86e0;
+  --color-s3: #1baf7a;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 18px -8px rgb(0 0 0 / 0.5);
+  --shadow-lift: 0 2px 6px rgb(0 0 0 / 0.35), 0 16px 36px -12px rgb(0 0 0 / 0.6);
+  color-scheme: dark;
 }
 
 html {
@@ -37,6 +75,48 @@ html {
 body {
   font-family: var(--font-sans);
   font-feature-settings: "tnum" 1, "cv11" 1;
+}
+
+@layer components {
+/* Layered surfaces (in a layer so utilities like bg-ink can override) */
+.surface {
+  background: var(--color-card);
+  box-shadow: var(--shadow-card);
+}
+.glass {
+  background: color-mix(in srgb, var(--color-paper) 78%, transparent);
+  backdrop-filter: saturate(1.4) blur(14px);
+  -webkit-backdrop-filter: saturate(1.4) blur(14px);
+}
+.lift {
+  transition: transform 180ms cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 180ms ease, border-color 180ms ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+
+}
+
+/* Visible, consistent keyboard focus */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+@layer components {
+/* Skeleton shimmer (static under reduced motion) */
+.skeleton {
+  background: linear-gradient(90deg, var(--color-sunken) 25%, var(--color-line) 37%, var(--color-sunken) 63%);
+  background-size: 400% 100%;
+  animation: ff-shimmer 1.4s ease infinite;
+  border-radius: 10px;
+}
+}
+@keyframes ff-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
 }
 
 .num {
@@ -65,7 +145,7 @@ input[type="range"].ff-range::-webkit-slider-thumb {
   width: 22px;
   height: 22px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--color-card);
   border: 2px solid var(--color-brand);
   box-shadow: 0 1px 4px rgb(14 26 36 / 0.2);
   cursor: grab;
@@ -79,7 +159,7 @@ input[type="range"].ff-range::-moz-range-thumb {
   width: 20px;
   height: 20px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--color-card);
   border: 2px solid var(--color-brand);
   cursor: grab;
 }

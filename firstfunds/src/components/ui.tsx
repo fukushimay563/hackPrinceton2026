@@ -6,10 +6,27 @@ export function cn(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(" ");
 }
 
-export function Card({ className, children }: { className?: string; children: ReactNode }) {
+export function Card({ className, children, interactive }: { className?: string; children: ReactNode; interactive?: boolean }) {
   return (
-    <div className={cn("rounded-2xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(14,26,36,0.04)] sm:p-6", className)}>
+    <div className={cn("surface rounded-2xl border border-line p-5 sm:p-6", interactive && "lift hover:border-brand/40", className)}>
       {children}
+    </div>
+  );
+}
+
+/** Placeholder while data loads; fixed height prevents layout shift. */
+export function Skeleton({ className }: { className?: string }) {
+  return <div aria-hidden className={cn("skeleton h-4", className)} />;
+}
+
+/** Friendly empty state with exactly one primary action. */
+export function EmptyState({ icon, title, body, action }: { icon?: ReactNode; title: string; body: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-dashed border-line bg-sunken/60 px-6 py-10 text-center">
+      {icon && <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-brand-soft text-brand">{icon}</div>}
+      <div className="font-semibold text-ink">{title}</div>
+      <p className="mt-1 max-w-sm text-sm text-ink-2">{body}</p>
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }
@@ -30,9 +47,9 @@ export function Button({
   disabled?: boolean;
 }) {
   const styles = {
-    primary: "bg-ink text-white hover:bg-ink-2",
-    secondary: "bg-white text-ink border border-line hover:border-ink-3",
-    ghost: "text-ink-2 hover:bg-black/5",
+    primary: "bg-ink text-paper shadow-sm hover:bg-ink-2",
+    secondary: "bg-card text-ink border border-line shadow-sm hover:border-ink-3",
+    ghost: "text-ink-2 hover:bg-ink/5",
   }[variant];
   return (
     <button
@@ -40,7 +57,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-mint disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-[background-color,border-color,transform] duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
         styles,
         className,
       )}
@@ -71,7 +88,7 @@ export function InfoTip({ children, label = "More info" }: { children: ReactNode
         <span
           id={id}
           role="tooltip"
-          className="absolute bottom-6 left-1/2 z-30 w-64 -translate-x-1/2 rounded-lg bg-ink px-3 py-2 text-xs leading-relaxed font-normal text-white shadow-lg"
+          className="absolute bottom-6 left-1/2 z-30 w-64 -translate-x-1/2 rounded-lg bg-ink px-3 py-2 text-xs leading-relaxed font-normal text-paper shadow-lg"
         >
           {children}
         </span>
@@ -108,7 +125,7 @@ export function Stat({
 
 export function Badge({ children, tone = "default" }: { children: ReactNode; tone?: "default" | "good" | "bad" | "warn" | "info" }) {
   const s = {
-    default: "bg-black/5 text-ink-2",
+    default: "bg-ink/5 text-ink-2",
     good: "bg-brand-soft text-brand-2",
     bad: "bg-debt-soft text-debt",
     warn: "bg-warn-soft text-warn",

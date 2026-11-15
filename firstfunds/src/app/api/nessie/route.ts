@@ -1,50 +1,27 @@
-// Optional Capital One Nessie sandbox adapter. If NESSIE_API_KEY and
-// NESSIE_ACCOUNT_ID are set, pulls sandbox purchases; otherwise returns the
-// bundled demo transactions so the demo never depends on the network.
-// Nessie docs: http://api.nessieisreal.com/documentation (verify the current
-// Capital One prize rules before relying on this for eligibility).
+// Card-page feed: credit-card purchases from the shared banking pipeline (lib/banking).
+// Returns source "nessie" only when the rows really came from the Nessie sandbox API;
+// otherwise the bundled demo transactions. Categories come from the normalizer — never invented.
 import { connection } from "next/server";
 import { MAYA_TRANSACTIONS, type Transaction } from "@/lib/demo/maya";
-
-
-type NessiePurchase = {
-  _id: string;
-  purchase_date?: string;
-  amount: number;
-  description?: string;
-  merchant_id?: string;
-};
-
-const CATS: Transaction["category"][] = ["Food", "Shopping", "Transport", "Subscriptions", "Entertainment", "Bills"];
+import { activeRows } from "@/lib/banking/overview";
+import { banking, DEMO_BANK_USER } from "@/lib/banking/repository";
+import { syncBanking } from "@/lib/banking/sync";
 
 export async function GET() {
   await connection(); // read env at request time, not build time
-  const key = process.env.NESSIE_API_KEY;
-  const account = process.env.NESSIE_ACCOUNT_ID;
-  if (!key || !account) {
-    return Response.json({ source: "demo", transactions: MAYA_TRANSACTIONS });
-  }
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 4000);
-    const res = await fetch(
-      `http://api.nessieisreal.com/accounts/${encodeURIComponent(account)}/purchases?key=${encodeURIComponent(key)}`,
-      { signal: ctrl.signal, cache: "no-store" },
-    );
-    clearTimeout(timer);
-    if (!res.ok) throw new Error(`Nessie ${res.status}`);
-    const data = (await res.json()) as NessiePurchase[];
-    const transactions: Transaction[] = data.slice(0, 50).map((p, i) => ({
-      id: p._id,
-      date: p.purchase_date ?? new Date().toISOString().slice(0, 10),
-      merchant: p.description || `Merchant ${p.merchant_id?.slice(-4) ?? i + 1}`,
-      category: CATS[i % CATS.length],
-      amount: Number(p.amount) || 0,
-    }));
-    if (!transactions.length) throw new Error("No purchases on sandbox account");
-    return Response.json({ source: "nessie", transactions });
-  } catch (err) {
-    console.error("Nessie unavailable, using demo data:", err);
-    return Response.json({ source: "demo", transactions: MAYA_TRANSACTIONS });
-  }
+  const userId = DEMO_BANK_USER;
+  if (!banking.lastSync(userId)) await syncBanking(userId);
+  const last = banking.lastSync(userId);
+  const { provider, rows } = activeRows(userId);
+  const cardIds = new Set(banking.accounts(userId).filter((a) => a.type === "Credit Card").map((a) => a.id));
+  const purchases = rows.filter((t) => provider === "nessie" && t.flow === "expense" && t.kind === "purchase" && cardIds.has(t.accountId) && t.date);
+  if (!purchases.length) return Response.json({ source: "demo", transactions: MAYA_TRANSACTIONS, note: last?.label });
+  const transactions = purchases.slice(0, 50).map((t) => ({
+    id: t.id,
+    date: t.date!,
+    merchant: t.merchant ?? t.description ?? "Unknown merchant",
+    category: t.category as Transaction["category"],
+    amount: t.amount,
+  }));
+  return Response.json({ source: "nessie", transactions, note: last?.label });
 }

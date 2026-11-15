@@ -64,11 +64,11 @@ export default function AcademyPage() {
             <div className="h-2 rounded-full bg-brand transition-all duration-500" style={{ width: `${(s.done / s.total) * 100}%` }} />
           </div>
           {s.next ? (
-            <button onClick={() => setOpen(s.next!.id)} className="mt-4 flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-ink font-semibold text-white">
+            <button onClick={() => setOpen(s.next!.id)} className="mt-4 flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-ink font-semibold text-paper">
               {s.done ? "Continue" : "Start"}: {s.next.title} <ArrowRight size={16} />
             </button>
           ) : (
-            <Link href="/taxes" className="mt-4 flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-brand font-semibold text-white">
+            <Link href="/taxes" className="mt-4 flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-brand font-semibold text-on-brand">
               Course complete. Start your return <ArrowRight size={16} />
             </Link>
           )}
@@ -118,7 +118,7 @@ export default function AcademyPage() {
                     <button
                       key={l.id}
                       onClick={() => setOpen(l.id)}
-                      className={cn("rounded-2xl border bg-white p-4 text-left transition-colors hover:border-brand", done ? "border-brand/40" : "border-line")}
+                      className={cn("rounded-2xl border bg-card p-4 text-left transition-colors hover:border-brand", done ? "border-brand/40" : "border-line")}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="font-semibold">{l.title}</div>
@@ -227,11 +227,11 @@ function LessonView({
             </Card>
             <div className="mt-4 flex gap-2">
               {stage.i > 0 && (
-                <button onClick={() => setStage({ kind: "card", i: stage.i - 1 })} className="min-h-14 rounded-2xl border-2 border-line bg-white px-5 font-semibold">
+                <button onClick={() => setStage({ kind: "card", i: stage.i - 1 })} className="min-h-14 rounded-2xl border-2 border-line bg-card px-5 font-semibold">
                   Back
                 </button>
               )}
-              <button onClick={() => nextFromCard(stage.i)} className="min-h-14 flex-1 rounded-2xl bg-ink font-semibold text-white">
+              <button onClick={() => nextFromCard(stage.i)} className="min-h-14 flex-1 rounded-2xl bg-ink font-semibold text-paper">
                 Next
               </button>
             </div>
@@ -241,7 +241,7 @@ function LessonView({
         {stage.kind === "try" && lesson.tryIt && (
           <div>
             <TryIt kind={lesson.tryIt} />
-            <button onClick={() => setStage({ kind: "quiz", i: 0 })} className="mt-4 w-full min-h-14 rounded-2xl bg-ink font-semibold text-white">
+            <button onClick={() => setStage({ kind: "quiz", i: 0 })} className="mt-4 w-full min-h-14 rounded-2xl bg-ink font-semibold text-paper">
               Quick quiz ({lesson.quiz.length} questions)
             </button>
           </div>
@@ -269,11 +269,11 @@ function LessonView({
             <div className="mt-6 space-y-3">
               {passed ? (
                 isLast ? (
-                  <Link href="/taxes" className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl bg-brand font-semibold text-white">
+                  <Link href="/taxes" className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl bg-brand font-semibold text-on-brand">
                     Use it: start your return <ArrowRight size={18} />
                   </Link>
                 ) : (
-                  <button onClick={onNext} className="w-full min-h-14 rounded-2xl bg-ink font-semibold text-white">
+                  <button onClick={onNext} className="w-full min-h-14 rounded-2xl bg-ink font-semibold text-paper">
                     Next lesson
                   </button>
                 )
@@ -284,7 +284,7 @@ function LessonView({
                     setPicked(null);
                     setStage({ kind: "card", i: 0 });
                   }}
-                  className="w-full min-h-14 rounded-2xl bg-ink font-semibold text-white"
+                  className="w-full min-h-14 rounded-2xl bg-ink font-semibold text-paper"
                 >
                   Review and try again
                 </button>
@@ -294,7 +294,7 @@ function LessonView({
                   useApp.getState().setTutorOpen(true);
                   askTutorQuestion(`Can you explain more about: ${lesson.title}?`, "/academy");
                 }}
-                className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl border-2 border-line bg-white font-semibold"
+                className="flex w-full min-h-14 items-center justify-center gap-2 rounded-2xl border-2 border-line bg-card font-semibold"
               >
                 <Sparkles size={18} className="text-brand" /> Ask FinPilot about this
               </button>
@@ -349,10 +349,10 @@ function QuizStep({
               disabled={picked !== null}
               className={cn(
                 "flex w-full min-h-14 items-center justify-between gap-3 rounded-2xl border-2 px-4 py-3 text-left font-semibold transition-colors",
-                state === "idle" && "border-line bg-white hover:border-ink-3",
+                state === "idle" && "border-line bg-card hover:border-ink-3",
                 state === "right" && "border-brand bg-brand-soft text-brand-2",
                 state === "wrong" && "border-debt bg-debt-soft text-debt",
-                state === "dim" && "border-line bg-white opacity-50",
+                state === "dim" && "border-line bg-card opacity-50",
               )}
             >
               {o}
@@ -368,7 +368,7 @@ function QuizStep({
             <b>{picked === q.correct ? "Correct. " : "Not quite. "}</b>
             {q.explain}
           </p>
-          <button onClick={onNext} className="mt-3 w-full min-h-14 rounded-2xl bg-ink font-semibold text-white">
+          <button onClick={onNext} className="mt-3 w-full min-h-14 rounded-2xl bg-ink font-semibold text-paper">
             {index + 1 < total ? "Next question" : "See results"}
           </button>
         </div>

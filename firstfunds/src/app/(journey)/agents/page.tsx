@@ -3,15 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowUp,
-  Bot,
-  Calculator,
   CheckCircle2,
   CircleDashed,
-  FileSearch,
-  Landmark,
-  Lightbulb,
   Loader2,
-  MessageSquareText,
   RotateCcw,
   ShieldAlert,
   ShieldCheck,
@@ -19,8 +13,9 @@ import {
   XCircle,
 } from "lucide-react";
 import { Badge, Card, cn } from "@/components/ui";
+import { motion } from "framer-motion";
+import { AGENT_META, AgentStatusBoard, type AgentEvent } from "@/components/AgentActivity";
 
-type AgentEvent = { seq: number; agent: string; type: string; title: string; detail?: string };
 type Check = { name: string; pass: boolean; detail: string };
 type Run = {
   mode: string;
@@ -36,15 +31,7 @@ type Run = {
 type Bubble = { from: "user" | "finpilot" | "system"; text: string; status?: string };
 type SecurityLog = { ok: boolean; label: string; detail: string };
 
-const AGENT_META: Record<string, { label: string; icon: typeof Bot; color: string }> = {
-  supervisor: { label: "Supervisor", icon: Bot, color: "#0e1a24" },
-  document: { label: "Document Intelligence", icon: FileSearch, color: "#2a78d6" },
-  research: { label: "IRS Research", icon: Landmark, color: "#6250d6" },
-  calculation: { label: "Tax Calculation", icon: Calculator, color: "#1baf7a" },
-  verification: { label: "Verification", icon: ShieldCheck, color: "#eb6834" },
-  planning: { label: "Tax Planning", icon: Lightbulb, color: "#b7790d" },
-  communication: { label: "Communication", icon: MessageSquareText, color: "#3b4a57" },
-};
+
 
 const QUICK = ["Is my 2025 tax return ready?", "No", "What's my refund?", "STOP", "START"];
 const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -70,6 +57,7 @@ export default function AgentConsole() {
   const [modes, setModes] = useState<{ agents: string; photon: string } | null>(null);
   const [security, setSecurity] = useState<SecurityLog[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [showIntro, setShowIntro] = useState(false);
   const chatEnd = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -88,7 +76,21 @@ export default function AgentConsole() {
   useEffect(() => {
     // Deferred so the first render matches the server.
     Promise.resolve().then(load);
+    Promise.resolve().then(() => {
+      try {
+        setShowIntro(localStorage.getItem("ff-agents-intro") !== "dismissed");
+      } catch {
+        setShowIntro(true);
+      }
+    });
   }, [load]);
+
+  function dismissIntro() {
+    setShowIntro(false);
+    try {
+      localStorage.setItem("ff-agents-intro", "dismissed");
+    } catch {}
+  }
 
   useEffect(() => {
     // Braces matter: scroll methods may return a Promise, and React would treat it as a cleanup.
@@ -166,7 +168,7 @@ export default function AgentConsole() {
               <Badge tone={modes.photon === "live" ? "good" : "warn"}>Photon: {modes.photon === "live" ? "live" : "MOCK mode"}</Badge>
             </>
           )}
-          <button onClick={reset} className="inline-flex items-center gap-1 rounded-xl border border-line bg-white px-3 py-2 text-sm font-semibold hover:border-ink-3">
+          <button onClick={reset} className="inline-flex items-center gap-1 rounded-xl border border-line bg-card px-3 py-2 text-sm font-semibold hover:border-ink-3">
             <RotateCcw size={14} /> Reset demo
           </button>
         </div>
@@ -177,9 +179,9 @@ export default function AgentConsole() {
         {/* Phone */}
         <div className="mx-auto w-full max-w-[340px]">
           <div className="rounded-[2.2rem] border-8 border-ink bg-ink shadow-xl">
-            <div className="rounded-[1.6rem] bg-white">
+            <div className="rounded-[1.6rem] bg-card">
               <div className="border-b border-line px-4 py-3 text-center">
-                <div className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-brand text-sm font-bold text-white">F</div>
+                <div className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-brand text-sm font-bold text-on-brand">F</div>
                 <div className="mt-1 text-xs font-semibold">FinPilot</div>
                 <div className="text-[10px] text-ink-3">iMessage via Photon {modes?.photon === "mock" ? "(mock)" : ""}</div>
               </div>
@@ -187,7 +189,7 @@ export default function AgentConsole() {
                 {chat.length === 0 && <p className="mt-16 text-center text-xs text-ink-3">Send a message to start. Maya&apos;s synthetic W-2s are already in her account.</p>}
                 {chat.map((m, i) => (
                   <div key={i} className={cn("flex", m.from === "user" ? "justify-end" : "justify-start")}>
-                    <div className={cn("max-w-[85%] rounded-2xl px-3 py-2 text-[13px] leading-snug whitespace-pre-wrap", m.from === "user" ? "rounded-br-md bg-[#0a84ff] text-white" : "rounded-bl-md bg-[#e9e9eb] text-ink")}>
+                    <div className={cn("max-w-[85%] rounded-2xl px-3 py-2 text-[13px] leading-snug whitespace-pre-wrap", m.from === "user" ? "rounded-br-md bg-[#0a84ff] text-white" : "rounded-bl-md bg-[#e9e9eb] text-[#0f1d2e]")}>
                       {linkify(m.text)}
                       {m.status && m.from !== "user" && m.status !== "sent" && <div className="mt-1 text-[10px] opacity-60">{m.status}</div>}
                     </div>
@@ -231,10 +233,24 @@ export default function AgentConsole() {
         {/* Timeline */}
         <Card className="min-h-[520px]">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold">Agent activity</h2>
+            <h2 className="flex items-center gap-2 font-semibold">Agent activity {busy && <span className="text-xs font-medium text-brand">· request in progress</span>}</h2>
             {run && <span className="text-xs text-ink-3">{run.status === "awaiting-approval" ? "Waiting for your approval" : `${run.events.length} steps`}</span>}
           </div>
-          {!run && <p className="mt-6 text-sm text-ink-3">Actions and outcomes appear here as the supervisor delegates. Internal model reasoning is never shown.</p>}
+          {showIntro && (
+            <div className="mt-3 flex items-start gap-2 rounded-xl border border-info/30 bg-info-soft p-3 text-xs text-info">
+              <span className="flex-1">
+                <b>How this works:</b> the Supervisor hands each task to a specialist. <b>Done</b> means the step finished; <b>Needs attention</b> means a claim was blocked
+                until you confirm something. Only actions and outcomes are shown, never internal model reasoning.
+              </span>
+              <button type="button" onClick={dismissIntro} aria-label="Dismiss" className="rounded p-0.5 hover:bg-info/10"><XCircle size={14} /></button>
+            </div>
+          )}
+          {(run || busy) && (
+            <div className="mt-4">
+              <AgentStatusBoard events={run?.events ?? []} shown={busy ? 0 : shown} busy={busy} compact />
+            </div>
+          )}
+          {!run && !busy && <p className="mt-6 text-sm text-ink-3">Send a message on the phone to start a run. Each agent&apos;s actions and outcomes appear here.</p>}
           {run && run.todos.length > 0 && (
             <ol className="mt-4 flex flex-wrap gap-1.5">
               {run.todos.map((t) => (
@@ -249,7 +265,7 @@ export default function AgentConsole() {
               const meta = AGENT_META[e.agent] ?? AGENT_META.supervisor;
               const Icon = meta.icon;
               return (
-                <li key={e.seq} className={cn("flex gap-3 rounded-xl border p-3", e.agent === "supervisor" ? "border-line bg-paper" : "ml-4 border-line bg-white")}>
+                <motion.li key={e.seq} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2 }} className={cn("flex gap-3 rounded-xl border p-3", e.agent === "supervisor" ? "border-line bg-sunken" : "ml-4 border-line bg-card")}>
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white" style={{ background: meta.color }}>
                     <Icon size={16} />
                   </span>
@@ -263,12 +279,12 @@ export default function AgentConsole() {
                     <div className="text-sm text-ink">{e.title}</div>
                     {e.detail && <div className="mt-0.5 text-xs break-words text-ink-3">{e.detail}</div>}
                   </div>
-                </li>
+                </motion.li>
               );
             })}
             {run && shown < run.events.length && (
               <li className="flex items-center gap-2 text-sm text-ink-3">
-                <Loader2 size={14} className="animate-spin" /> Working…
+                <Loader2 size={14} className="animate-spin" /> Showing the recorded steps in order…
               </li>
             )}
           </ol>
