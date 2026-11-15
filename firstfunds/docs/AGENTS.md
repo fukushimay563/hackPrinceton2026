@@ -72,7 +72,7 @@ iMessage ─► Photon 2.0 (Beta) ─► POST /api/photon/webhook   (event: mess
 ```bash
 npm install
 npm run dev                 # open http://localhost:3000/agents
-npm test                    # 97 tests (8 files)
+npm test                    # 106 tests (8 files)
 ```
 
 **Two-minute demo (mock mode, synthetic data):**

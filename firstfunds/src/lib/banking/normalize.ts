@@ -1,4 +1,6 @@
-// Deterministic conversion of Nessie records into BankTransaction rows.
+// Deterministic conversion of Nessie v2 records into BankTransaction rows.
+// v2 sends money as integer cents and ids as `id`; each transaction has a `kind` and
+// payer_id/payee_id (account ids). See src/lib/banking/nessie.ts for the contract.
 // Rules (financial accuracy):
 //  • Transfers between the user's own accounts (incl. paying their own credit card) are `transfer` — never income/expense.
 //  • Refunds/returns are `refund` — they reduce spending; they are never income.
@@ -6,7 +8,7 @@
 //  • A deposit is only labelled employment income when its description says so; otherwise it is income flagged for review.
 //  • Missing dates stay null and missing/invalid amounts are skipped — nothing is invented.
 //  • Anything uncertain gets needsReview + a reason.
-import type { BankAccount, BankTransaction, BudgetCategory, CategorySource, Flow, NessieKind, Provider } from "./types";
+import type { BankAccount, BankBill, BankLoan, BankTransaction, BudgetCategory, CategorySource, Flow, NessieKind, Provider } from "./types";
 import type { NessieRaw } from "./nessie";
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -24,6 +26,14 @@ export function normalizeAmount(v: unknown): number | null {
   const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
   if (!Number.isFinite(n) || n <= 0) return null;
   return Math.round(n * 100) / 100;
+}
+
+/** Integer cents → dollars. Null for missing, non-integer or non-finite values (never guessed). */
+export function centsToDollars(v: unknown, opts: { allowZero?: boolean; allowNegative?: boolean } = {}): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v) || !Number.isInteger(v)) return null;
+  if (v < 0 && !opts.allowNegative) return null;
+  if (v === 0 && !opts.allowZero) return null;
+  return Math.round(v) / 100;
 }
 
 /** Stable key used to match user category corrections to similar transactions. */
@@ -62,11 +72,11 @@ export type NormalizeInput = {
   provider: Provider;
   userId: string;
   accounts: NessieRaw[];
-  deposits: { accountId: string; items: NessieRaw[] }[];
-  withdrawals: { accountId: string; items: NessieRaw[] }[];
-  purchases: NessieRaw[];
-  transfers: NessieRaw[];
+  /** Per-account lists from /accounts/{id}/transactions (duplicates across accounts are merged). */
+  transactions: { accountId: string; items: NessieRaw[] }[];
   merchants: NessieRaw[];
+  bills?: NessieRaw[];
+  loans?: NessieRaw[];
   corrections?: Corrections;
   now?: number;
 };
@@ -74,17 +84,19 @@ export type NormalizeInput = {
 export type NormalizeOutput = {
   accounts: BankAccount[];
   transactions: BankTransaction[];
+  bills: BankBill[];
+  loans: BankLoan[];
   skipped: { kind: string; externalId: string | null; reason: string }[];
 };
 
 const ACCOUNT_TYPES = new Set(["Checking", "Savings", "Credit Card"]);
+const KINDS = new Set<NessieKind>(["purchase", "deposit", "withdrawal", "transfer", "bill_payment", "fee", "interest_credit", "refund", "chargeback"]);
 
 export function normalizeAccount(raw: NessieRaw, provider: Provider, userId: string): BankAccount | null {
-  const externalId = str(raw._id);
+  const externalId = str(raw.id);
   if (!externalId) return null;
   const t = str(raw.type);
   const num = str(raw.account_number);
-  const bal = typeof raw.balance === "number" && Number.isFinite(raw.balance) ? raw.balance : null;
   return {
     id: `${provider}:${externalId}`,
     provider,
@@ -92,7 +104,9 @@ export function normalizeAccount(raw: NessieRaw, provider: Provider, userId: str
     userId,
     type: t && ACCOUNT_TYPES.has(t) ? (t as BankAccount["type"]) : "Unknown",
     nickname: str(raw.nickname),
-    balance: bal,
+    balance: centsToDollars(raw.balance_cents, { allowZero: true, allowNegative: true }),
+    available: centsToDollars(raw.available_cents, { allowZero: true, allowNegative: true }),
+    creditLimit: centsToDollars(raw.credit_limit_cents, { allowZero: true }),
     last4: num && /^\d{4,}$/.test(num) ? num.slice(-4) : null,
   };
 }
@@ -104,6 +118,8 @@ function safeRaw(raw: NessieRaw): Record<string, unknown> {
   return rest;
 }
 
+const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
 export function normalizeNessie(input: NormalizeInput): NormalizeOutput {
   const { provider, userId } = input;
   const now = input.now ?? Date.now();
@@ -113,11 +129,13 @@ export function normalizeNessie(input: NormalizeInput): NormalizeOutput {
   for (const a of input.accounts) {
     const acc = normalizeAccount(a, provider, userId);
     if (acc) accounts.push(acc);
-    else skipped.push({ kind: "account", externalId: null, reason: "missing _id" });
+    else skipped.push({ kind: "account", externalId: null, reason: "missing id" });
   }
   const own = new Map(accounts.map((a) => [a.externalId, a]));
-  const merchants = new Map(input.merchants.map((m) => [str(m._id) ?? "", m]));
+  const merchants = new Map(input.merchants.map((m) => [str(m.id) ?? "", m]));
+  const billsById = new Map((input.bills ?? []).map((b) => [str(b.id) ?? "", b]));
   const out: BankTransaction[] = [];
+  const seen = new Set<string>();
 
   const push = (args: {
     kind: NessieKind;
@@ -129,21 +147,25 @@ export function normalizeNessie(input: NormalizeInput): NormalizeOutput {
     categorySource: CategorySource;
     merchant: string | null;
     reasons: string[];
-    dateField: unknown;
   }) => {
-    const externalId = str(args.raw._id);
-    if (!externalId) return void skipped.push({ kind: args.kind, externalId: null, reason: "missing _id" });
-    const amount = normalizeAmount(args.raw.amount);
-    if (amount === null) return void skipped.push({ kind: args.kind, externalId, reason: "missing or non-positive amount" });
+    const externalId = str(args.raw.id)!;
+    const amount = centsToDollars(args.raw.amount_cents);
+    if (amount === null) return void skipped.push({ kind: args.kind, externalId, reason: "missing or non-positive amount_cents" });
     const reasons = [...args.reasons];
-    const date = normalizeDate(args.dateField);
+    const date = normalizeDate(args.raw.created_at);
     if (!date) reasons.push("Date missing or invalid in source data");
     if (!args.accountExt || !own.has(args.accountExt)) reasons.push("Account not found in this profile");
     let { category, categorySource, flow } = args;
     const status = str(args.raw.status);
-    if (status && /cancel/i.test(status)) {
+    if (status === "declined" || status === "cancelled" || (status && /cancel/i.test(status))) {
       flow = "excluded";
-      reasons.push("Cancelled in source data");
+      reasons.push(status === "declined" ? "Declined in source data" : "Cancelled in source data");
+    } else if (status === "pending") {
+      reasons.push("Pending in Nessie; the amount may still change or be declined");
+    }
+    if (str(args.raw.medium) === "rewards" && flow !== "excluded") {
+      flow = "excluded";
+      reasons.push("Paid with rewards points, not money; not counted");
     }
     // User-approved corrections win for spending/income rows (never for own-account transfers).
     const key = merchantKey(args.merchant ?? str(args.raw.description));
@@ -176,80 +198,143 @@ export function normalizeNessie(input: NormalizeInput): NormalizeOutput {
     });
   };
 
-  // Deposits
-  for (const group of input.deposits) {
-    const acct = own.get(group.accountId);
-    for (const d of group.items) {
-      const desc = str(d.description);
-      const base = { kind: "deposit" as const, raw: d, accountExt: group.accountId, direction: "inflow" as const, merchant: null, dateField: d.transaction_date };
-      if (acct?.type === "Credit Card") {
-        push({ ...base, flow: "transfer", category: "Card payment", categorySource: "rule", reasons: ["Deposit into a credit card account treated as a card payment, not income"] });
-      } else if (desc && REFUND.test(desc)) {
-        push({ ...base, flow: "refund", category: "Refund", categorySource: "rule", reasons: [] });
-      } else if (desc && PAYROLL.test(desc)) {
-        push({ ...base, flow: "income", category: "Income", categorySource: "rule", reasons: [] });
-      } else {
-        push({ ...base, flow: "income", category: "Income", categorySource: "none", reasons: ["Deposit source unknown; not assumed to be employment income"] });
+  const hasCard = accounts.some((a) => a.type === "Credit Card");
+  for (const group of input.transactions) {
+    for (const t of group.items) {
+      const externalId = str(t.id);
+      if (!externalId) {
+        skipped.push({ kind: "transaction", externalId: null, reason: "missing id" });
+        continue;
+      }
+      if (seen.has(externalId)) continue; // a transfer is listed under both accounts
+      seen.add(externalId);
+      const kind = str(t.kind) as NessieKind | null;
+      if (!kind || !KINDS.has(kind)) {
+        skipped.push({ kind: String(t.kind ?? "unknown"), externalId, reason: "unknown transaction kind" });
+        continue;
+      }
+      const desc = str(t.description);
+      const payer = str(t.payer_id);
+      const payee = str(t.payee_id);
+      // The account a credit/debit lands on: its own side when known, else the account it was listed under.
+      const creditAcct = payee && own.has(payee) ? payee : group.accountId;
+      const debitAcct = payer && own.has(payer) ? payer : group.accountId;
+
+      switch (kind) {
+        case "deposit": {
+          const acct = own.get(creditAcct);
+          const base = { kind, raw: t, accountExt: creditAcct, direction: "inflow" as const, merchant: null };
+          if (acct?.type === "Credit Card") push({ ...base, flow: "transfer", category: "Card payment", categorySource: "rule", reasons: ["Deposit into a credit card account treated as a card payment, not income"] });
+          else if (desc && REFUND.test(desc)) push({ ...base, flow: "refund", category: "Refund", categorySource: "rule", reasons: [] });
+          else if (desc && PAYROLL.test(desc)) push({ ...base, flow: "income", category: "Income", categorySource: "rule", reasons: [] });
+          else push({ ...base, flow: "income", category: "Income", categorySource: "none", reasons: ["Deposit source unknown; not assumed to be employment income"] });
+          break;
+        }
+        case "interest_credit":
+          push({ kind, raw: t, accountExt: creditAcct, direction: "inflow", merchant: null, flow: "income", category: "Income", categorySource: "rule", reasons: [] });
+          break;
+        case "refund":
+          push({ kind, raw: t, accountExt: creditAcct, direction: "inflow", merchant: desc, flow: "refund", category: "Refund", categorySource: "rule", reasons: [] });
+          break;
+        case "withdrawal": {
+          const base = { kind, raw: t, accountExt: debitAcct, direction: "outflow" as const, merchant: null };
+          if (desc && hasCard && CARD_PAYMENT.test(desc)) {
+            push({ ...base, flow: "transfer", category: "Card payment", categorySource: "rule", reasons: ["Looks like a payment to your own credit card; excluded so purchases aren't counted twice"] });
+          } else {
+            const cat = categorize(desc);
+            push({ ...base, flow: "expense", category: cat ?? "Uncategorized", categorySource: cat ? "rule" : "none", reasons: cat ? [] : ["Withdrawal category unknown"] });
+          }
+          break;
+        }
+        case "purchase": {
+          const m = merchants.get(str(t.merchant_id) ?? "");
+          const name = m ? str(m.name) : null;
+          const mcat = m ? str(m.category) : null;
+          const cat = categorize(mcat, name, desc);
+          const isRefund = !!desc && REFUND.test(desc);
+          push({
+            kind,
+            raw: t,
+            accountExt: debitAcct,
+            direction: isRefund ? "inflow" : "outflow",
+            flow: isRefund ? "refund" : "expense",
+            category: isRefund ? "Refund" : cat ?? "Uncategorized",
+            categorySource: isRefund ? "rule" : cat ? (mcat ? "provider" : "rule") : "none",
+            merchant: name ?? desc,
+            reasons: isRefund || cat ? [] : ["Purchase category unknown"],
+          });
+          break;
+        }
+        case "bill_payment": {
+          const bill = billsById.get(str(t.bill_id) ?? "");
+          const payeeName = bill ? str(bill.payee) ?? str(bill.nickname) : null;
+          const cat = categorize(payeeName, desc);
+          push({ kind, raw: t, accountExt: debitAcct, direction: "outflow", merchant: payeeName ?? desc, flow: "expense", category: cat ?? "Bills", categorySource: "rule", reasons: [] });
+          break;
+        }
+        case "fee":
+          push({ kind, raw: t, accountExt: debitAcct, direction: "outflow", merchant: desc ?? "Bank fee", flow: "expense", category: "Bills", categorySource: "rule", reasons: [] });
+          break;
+        case "chargeback":
+          push({ kind, raw: t, accountExt: debitAcct, direction: "outflow", merchant: desc, flow: "excluded", category: "Refund", categorySource: "none", reasons: ["Chargeback: not counted until you review what it reverses"] });
+          break;
+        case "transfer": {
+          const payerOwn = payer ? own.get(payer) : undefined;
+          const payeeOwn = payee ? own.get(payee) : undefined;
+          const base = { kind, raw: t, merchant: null };
+          if (payerOwn && payeeOwn) {
+            const toCard = payeeOwn.type === "Credit Card";
+            push({ ...base, accountExt: payer, direction: "outflow", flow: "transfer", category: toCard ? "Card payment" : "Transfer", categorySource: "rule", reasons: [] });
+          } else if (payerOwn) {
+            push({ ...base, accountExt: payer, direction: "outflow", flow: "excluded", category: "Transfer", categorySource: "none", reasons: ["Transfer to an account outside this profile; review whether it is spending"] });
+          } else if (payeeOwn) {
+            push({ ...base, accountExt: payee, direction: "inflow", flow: "excluded", category: "Transfer", categorySource: "none", reasons: ["Transfer from an account outside this profile; review whether it is income"] });
+          } else {
+            skipped.push({ kind, externalId, reason: "neither payer nor payee is an account in this profile" });
+          }
+          break;
+        }
       }
     }
   }
 
-  // Withdrawals
-  for (const group of input.withdrawals) {
-    const hasCard = accounts.some((a) => a.type === "Credit Card");
-    for (const w of group.items) {
-      const desc = str(w.description);
-      const base = { kind: "withdrawal" as const, raw: w, accountExt: group.accountId, direction: "outflow" as const, merchant: null, dateField: w.transaction_date };
-      if (desc && hasCard && CARD_PAYMENT.test(desc)) {
-        push({ ...base, flow: "transfer", category: "Card payment", categorySource: "rule", reasons: ["Looks like a payment to your own credit card; excluded so purchases aren't counted twice"] });
-      } else {
-        const cat = categorize(desc, str(w.medium));
-        push({ ...base, flow: "expense", category: cat ?? "Uncategorized", categorySource: cat ? "rule" : "none", reasons: cat ? [] : ["Withdrawal category unknown"] });
-      }
-    }
+  const bills: BankBill[] = [];
+  for (const b of input.bills ?? []) {
+    const id = str(b.id);
+    const acct = str(b.account_id);
+    if (!id || !acct) continue;
+    const amt = num(b.payment_amount); // Nessie v2 sends bill amounts in dollars
+    const day = num(b.recurring_date);
+    bills.push({
+      id: `${provider}:bill:${id}`,
+      provider,
+      accountId: `${provider}:${acct}`,
+      payee: str(b.payee),
+      nickname: str(b.nickname),
+      status: str(b.status),
+      amount: amt !== null && amt >= 0 ? Math.round(amt * 100) / 100 : null,
+      upcomingPaymentDate: normalizeDate(b.upcoming_payment_date),
+      recurringDay: day !== null && Number.isInteger(day) && day >= 1 && day <= 31 ? day : null,
+    });
   }
-
-  // Purchases (fetched by id; account comes from payer_id when present)
-  for (const p of input.purchases) {
-    const m = merchants.get(str(p.merchant_id) ?? "");
-    const name = m ? str(m.name) : null;
-    const mcat = m ? str(m.category) : null;
-    const desc = str(p.description);
-    const cat = categorize(mcat, name, desc);
-    const reasons = cat ? [] : ["Purchase category unknown"];
-    const isRefund = !!desc && REFUND.test(desc);
-    push({
-      kind: "purchase",
-      raw: p,
-      accountExt: str(p.payer_id),
-      direction: isRefund ? "inflow" : "outflow",
-      flow: isRefund ? "refund" : "expense",
-      category: isRefund ? "Refund" : cat ?? "Uncategorized",
-      categorySource: isRefund ? "rule" : cat ? (mcat ? "provider" : "rule") : "none",
-      merchant: name ?? desc,
-      reasons: isRefund ? [] : reasons,
-      dateField: p.purchase_date ?? p.transaction_date,
+  const loans: BankLoan[] = [];
+  for (const l of input.loans ?? []) {
+    const id = str(l.id);
+    const acct = str(l.account_id);
+    if (!id || !acct) continue;
+    const score = num(l.credit_score);
+    loans.push({
+      id: `${provider}:loan:${id}`,
+      provider,
+      accountId: `${provider}:${acct}`,
+      type: str(l.type),
+      status: str(l.status),
+      description: str(l.description),
+      amount: centsToDollars(l.amount_cents, { allowZero: true }),
+      monthlyPayment: centsToDollars(l.monthly_payment_cents, { allowZero: true }),
+      creditScore: score !== null && score >= 300 && score <= 850 ? score : null,
     });
   }
 
-  // Transfers: one row per transfer, from the paying side when it is one of our accounts.
-  for (const t of input.transfers) {
-    const payer = str(t.payer_id);
-    const payee = str(t.payee_id);
-    const payerOwn = payer ? own.get(payer) : undefined;
-    const payeeOwn = payee ? own.get(payee) : undefined;
-    const base = { kind: "transfer" as const, raw: t, merchant: null, dateField: t.transaction_date };
-    if (payerOwn && payeeOwn) {
-      const toCard = payeeOwn.type === "Credit Card";
-      push({ ...base, accountExt: payer, direction: "outflow", flow: "transfer", category: toCard ? "Card payment" : "Transfer", categorySource: "rule", reasons: [] });
-    } else if (payerOwn) {
-      push({ ...base, accountExt: payer, direction: "outflow", flow: "excluded", category: "Transfer", categorySource: "none", reasons: ["Transfer to an account outside this profile; review whether it is spending"] });
-    } else if (payeeOwn) {
-      push({ ...base, accountExt: payee, direction: "inflow", flow: "excluded", category: "Transfer", categorySource: "none", reasons: ["Transfer from an account outside this profile; review whether it is income"] });
-    } else {
-      skipped.push({ kind: "transfer", externalId: str(t._id), reason: "neither payer nor payee is an account in this profile" });
-    }
-  }
-
-  return { accounts, transactions: out, skipped };
+  return { accounts, transactions: out, bills, loans, skipped };
 }
