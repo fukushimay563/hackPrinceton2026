@@ -3,11 +3,14 @@
 import { connection } from "next/server";
 import { geminiBackend, geminiConfigured, geminiModelInfo, pingGemini } from "@/lib/server/gemini";
 import { agentMode } from "@/lib/agents/supervisor";
+import { photonConfigProblems, photonMode } from "@/lib/photon/transport";
+import { parseDemoNumbers } from "@/lib/photon/handles.mjs";
 
 export async function GET(req: Request) {
   await connection();
   const check = new URL(req.url).searchParams.get("check");
   const model = geminiModelInfo();
+  const demo = parseDemoNumbers(process.env.PHOTON_DEMO_NUMBERS);
   return Response.json({
     ok: true,
     integrations: {
@@ -19,6 +22,13 @@ export async function GET(req: Request) {
       agents: agentMode(),
       supabase: !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
       nessie: !!process.env.NESSIE_API_KEY,
+      // Counts and setting names only, never numbers or secrets.
+      photon: {
+        mode: photonMode(),
+        problems: photonMode() === "live" ? photonConfigProblems() : [],
+        demoNumbersConfigured: demo.handles.size,
+        demoNumbersInvalid: demo.invalid,
+      },
     },
     ...(check === "gemini" ? { geminiCheck: await pingGemini() } : {}),
     region: process.env.VERCEL_REGION ?? null,

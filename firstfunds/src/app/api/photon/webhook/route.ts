@@ -33,6 +33,8 @@ export async function POST(req: Request) {
   }
 
   const raw = new Uint8Array(await req.arrayBuffer());
+  // Receipt log: ids and sizes only, never the body (it contains phone numbers and text).
+  log("info", "photon.webhook.received", { mode, webhookId: req.headers.get("webhook-id")?.slice(0, 40) ?? null, bytes: raw.byteLength });
   const v = await verifyDelivery(raw, req.headers, secret);
   if (!v.ok) {
     log("warn", "photon.webhook.rejected", { status: v.status, reason: v.reason, mode });
@@ -40,8 +42,10 @@ export async function POST(req: Request) {
   }
   if (!v.inbound) {
     // Other events (and our own outbound echoes) are acknowledged so Photon doesn't retry them.
+    log("info", "photon.webhook.verified", { mode, result: "ignored", reason: v.ignored });
     return Response.json({ ok: true, mode, ignored: v.ignored });
   }
+  log("info", "photon.webhook.verified", { mode, result: "message", eventId: v.inbound.eventId, messageBody: v.inbound.text ? "present" : "missing", hasSender: !!v.inbound.senderId });
   const inbound = v.inbound;
   const sender =
     mode === "live" && inbound.agentUserId
@@ -49,7 +53,8 @@ export async function POST(req: Request) {
       : mockSender();
   after(async () => {
     try {
-      await handleInbound(inbound, sender);
+      const r = await handleInbound(inbound, sender);
+      log("info", "photon.webhook.handled", { eventId: inbound.eventId, status: r.status, route: r.route ?? null, delivery: r.replies.map((x) => x.status) });
     } catch (e) {
       log("error", "photon.webhook.handler_error", { eventId: inbound.eventId, error: e instanceof Error ? e.message.slice(0, 120) : "unknown" });
     }
