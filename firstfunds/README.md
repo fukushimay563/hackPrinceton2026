@@ -9,6 +9,7 @@ HackPrinceton Fall 2026 · Business & Enterprise.
 | **Tax Assistant** | `/taxes` (`/taxes/classic`) | 2025 federal return estimate that asks the fewest questions: reads the W-2, confirms it, asks only what's missing, checks everything, needs your approval |
 | **Financial Advisory Academy** | `/academy` | 10 lessons for first-time taxpayers (3 modules) with interactive examples driven by the real tax engine, quizzes, XP and badges |
 | **FinPilot AI Assistant** | `/finpilot` + "Ask FinPilot" on every page | Support chatbot: money/tax questions with the user's own numbers and IRS/CFPB citations, plus help using the app |
+| **FinPilot Deep mode** | `/agents` (Agent Console) | Text FinPilot over **Photon 2.0** (iMessage). A **LangChain Deep Agents** supervisor delegates to 6 specialists, verifies, and asks for approval before saving. See `docs/AGENTS.md` |
 
 Everything works with **no keys at all** (sample data, offline FinPilot, progress saved in the tab). Add keys to turn on Gemini, Supabase accounts and Capital One Nessie.
 
@@ -18,7 +19,7 @@ Everything works with **no keys at all** (sample data, offline FinPilot, progres
 npm install
 cp .env.example .env.local   # optional
 npm run dev                  # http://localhost:3000
-npm test                     # 32 tests: tax/card engines, question minimizer, Academy content, database security
+npm test                     # 54+ tests: engines, question minimizer, Academy, hometown/cross-border tax, agents/Photon/security, database RLS
 ```
 
 Requires Node 20.9+.

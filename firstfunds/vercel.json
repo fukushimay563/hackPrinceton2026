@@ -3,7 +3,11 @@
   "framework": "nextjs",
   "functions": {
     "src/app/api/tutor/route.ts": { "maxDuration": 30 },
-    "src/app/api/w2-extract/route.ts": { "maxDuration": 30 }
+    "src/app/api/w2-extract/route.ts": { "maxDuration": 30 },
+    "src/app/api/photon/webhook/route.ts": { "maxDuration": 60 },
+    "src/app/api/agents/demo/route.ts": { "maxDuration": 60 },
+    "src/app/api/agents/clarify/route.ts": { "maxDuration": 60 },
+    "src/app/api/agents/approve/route.ts": { "maxDuration": 60 }
   },
   "headers": [
     {

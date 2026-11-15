@@ -1,4 +1,6 @@
 "use client";
+import Link from "next/link";
+import { IS_STATIC } from "@/lib/runtime";
 import { CreditCard, FileText, Wallet } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { cardSummary } from "@/lib/finance/credit";
@@ -21,6 +23,12 @@ export default function TutorPage() {
         title="Ask FinPilot anything"
         subtitle="Money and tax questions answered with your own numbers and IRS and CFPB sources, plus help using FirstFunds."
       />
+      {!IS_STATIC && <Link href="/agents" className="mb-6 flex items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand-soft/60 p-4 hover:bg-brand-soft">
+        <span className="text-sm">
+          <b>New: Deep mode.</b> Text FinPilot over iMessage and watch a team of specialist agents check your return, with verification before every answer.
+        </span>
+        <span className="shrink-0 text-sm font-semibold text-brand">Agent Console →</span>
+      </Link>}
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <TutorChat />
         <div className="space-y-4">

@@ -13,7 +13,7 @@ export const FEATURES = [
   { href: "/advisor", label: "Financial Advisor", short: "Advisor", icon: LineChart, match: ["/advisor", "/paycheck", "/credit"] },
   { href: "/taxes", label: "Tax Assistant", short: "Taxes", icon: FileText, match: ["/taxes"] },
   { href: "/academy", label: "Academy", short: "Academy", icon: GraduationCap, match: ["/academy"] },
-  { href: "/finpilot", label: "FinPilot", short: "FinPilot", icon: MessageCircle, match: ["/finpilot"] },
+  { href: "/finpilot", label: "FinPilot", short: "FinPilot", icon: MessageCircle, match: ["/finpilot", "/agents"] },
 ];
 
 /** Pages that work with Maya's demo or your own numbers. */
