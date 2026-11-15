@@ -1,6 +1,7 @@
 import { rateLimit } from "@/lib/server/rateLimit";
 import type { TutorContext } from "@/lib/tutor/context";
 import { answerQuestion } from "@/lib/tutor/answer";
+import { resolveBankingUser } from "@/lib/banking/http";
 
 type Body = {
   question: string;
@@ -20,5 +21,8 @@ export async function POST(req: Request) {
   }
   const question = (body.question ?? "").toString().slice(0, 1000).trim();
   if (!question) return Response.json({ error: "Ask a question first." }, { status: 400 });
-  return Response.json(await answerQuestion({ question, context: body.context, history: body.history, bankingTools: true, channel: "web" }));
+  // Banking tools read the verified user's own records (or the demo profile when signed out).
+  const who = await resolveBankingUser(req);
+  if (who instanceof Response) return who;
+  return Response.json(await answerQuestion({ question, context: body.context, history: body.history, bankingTools: true, channel: "web", bankUser: who.userId }));
 }

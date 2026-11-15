@@ -9,6 +9,7 @@ import { AnimatedNumber } from "@/components/motion";
 import { DURATION, EASE } from "@/lib/motion";
 import { AdvisorTabs } from "@/components/AppShell";
 import { IS_STATIC } from "@/lib/runtime";
+import { authHeaders } from "@/lib/supabase/client";
 import { usd } from "@/lib/format";
 import type { BankAccount, BankTransaction, BudgetCategory } from "@/lib/banking/types";
 import type { bankingOverview } from "@/lib/banking/overview";
@@ -37,7 +38,7 @@ export default function BudgetPage() {
     if (flow) p.set("flow", flow);
     if (reviewOnly) p.set("needsReview", "true");
     try {
-      const r = await fetch(`/api/banking?${p}`);
+      const r = await fetch(`/api/banking?${p}`, { headers: await authHeaders(), cache: "no-store" });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Request failed (${r.status})`);
       const d = (await r.json()) as Overview;
       setData(d);
@@ -57,7 +58,8 @@ export default function BudgetPage() {
   async function resync() {
     setBusy(true);
     try {
-      await fetch("/api/banking/sync", { method: "POST" });
+      const r = await fetch("/api/banking/sync", { method: "POST", headers: await authHeaders() });
+      if (!r.ok) setError((await r.json().catch(() => ({}))).error || `Sync failed (${r.status})`);
       await load();
     } finally {
       setBusy(false);
@@ -69,7 +71,7 @@ export default function BudgetPage() {
     if (!next || next === t.category) return;
     const r = await fetch(`/api/banking/transactions/${encodeURIComponent(t.id)}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
       body: JSON.stringify({ category: next, confirmedByUser: true }),
     });
     const d = await r.json();

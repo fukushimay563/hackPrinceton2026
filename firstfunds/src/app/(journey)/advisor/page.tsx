@@ -16,6 +16,7 @@ import { computeTax } from "@/lib/finance/tax2025";
 import { askTutorQuestion } from "@/lib/tutor/ask";
 import { duration, pct, usd } from "@/lib/format";
 import { IS_STATIC } from "@/lib/runtime";
+import { authHeaders } from "@/lib/supabase/client";
 import { AdvisorTabs } from "@/components/AppShell";
 import { AgentActivityIndicator, type AgentEvent } from "@/components/AgentActivity";
 import { Badge, Card, EmptyState, PageHeader, Skeleton, Stat, cn } from "@/components/ui";
@@ -43,7 +44,8 @@ export default function AdvisorPage() {
   useEffect(() => {
     if (IS_STATIC) return;
     let live = true;
-    fetch("/api/banking")
+    authHeaders()
+      .then((headers) => fetch("/api/banking", { headers, cache: "no-store" }))
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d: Banking) => live && (setBanking(d), setBankingState("ready")))
       .catch(() => live && setBankingState("unavailable"));

@@ -8,14 +8,21 @@ import { fetchNessieSnapshot, nessieConfigFromEnv, nessieConfigProblems, NessieE
 import { centsToDollars, normalizeNessie, normalizeDate, normalizeAmount } from "../src/lib/banking/normalize";
 import { captureLogs } from "../src/lib/agents/logger";
 import { fallbackSnapshot } from "../src/lib/banking/fallback";
-import { banking, DEMO_BANK_USER } from "../src/lib/banking/repository";
+import { memoryBanking, DEMO_BANK_USER, setBankingStoreForTests, _resetBankingStoreChoice } from "../src/lib/banking/repository";
 import { syncBanking } from "../src/lib/banking/sync";
 import { monthlySummary, spendingByCategory, recurringCandidates, budgetProgress } from "../src/lib/banking/analytics";
 import { activeRows, bankingOverview } from "../src/lib/banking/overview";
-import { runBankingTool, offlineBankingAnswer } from "../src/lib/banking/copilotTools";
+import { runBankingTool, offlineBankingAnswer, BANKING_TOOL_DECLARATIONS } from "../src/lib/banking/copilotTools";
 
 const U = DEMO_BANK_USER;
-beforeEach(() => banking._reset());
+beforeEach(() => {
+  memoryBanking._reset();
+  setBankingStoreForTests(null);
+  _resetBankingStoreChoice();
+});
+const load = () => memoryBanking.load(U);
+const txs = async () => (await load()).transactions;
+const getTx = async (id: string) => (await txs()).find((t) => t.id === id);
 
 // ---------- fake Nessie v2 server (documented GET endpoints only, Bearer auth, {items} lists) ----------
 type Snap = ReturnType<typeof fallbackSnapshot>;
@@ -220,19 +227,19 @@ test("repeated sync is idempotent (no duplicates)", async () => {
   assert.equal(r1.nessieStatus, "ok");
   assert.equal(r1.inserted, 20); // 4 deposits + 3 withdrawals + 9 purchases + 4 transfers (each once)
   assert.ok(r1.requests.some((q) => q.endpoint === "/accounts" && q.status === 200 && q.count === 3));
-  const n = banking.transactions(U).length;
+  const n = (await txs()).length;
   const r2 = await syncBanking(U, { config: cfg(f.impl) });
   assert.equal(r2.inserted, 0);
   assert.equal(r2.updated, 0);
   assert.equal(r2.unchanged, n);
-  assert.equal(banking.transactions(U).length, n);
-  assert.equal(new Set(banking.transactions(U).map((t) => t.id)).size, n);
+  assert.equal((await txs()).length, n);
+  assert.equal(new Set((await txs()).map((t) => t.id)).size, n);
 });
 
 // ---------- money math ----------
 test("monthly income, spending, refunds and net cash flow are computed from rows", async () => {
   await syncBanking(U, { config: null }); // labelled fictional fallback
-  const { rows } = activeRows(U);
+  const { rows } = activeRows(await load());
   const oct = monthlySummary(rows, "2026-10");
   assert.deepEqual([oct.income, oct.grossSpending, oct.refunds, oct.netCashFlow, oct.transfersExcluded], [1510, 1029.53, 0, 480.47, 257.23]);
   const nov = monthlySummary(rows, "2026-11");
@@ -242,7 +249,7 @@ test("monthly income, spending, refunds and net cash flow are computed from rows
   const rec = recurringCandidates(rows).map((r) => r.merchant).sort();
   assert.deepEqual(rec, ["Campus Coffee Co. (sample)", "FreshMart (sample)", "Rent bill payment", "StreamFlix (sample)"]);
   assert.ok(recurringCandidates(rows).every((r) => r.confidence === "candidate"));
-  const bills = budgetProgress(rows, "2026-11", banking.budgets(U)).find((b) => b.category === "Bills")!;
+  const bills = budgetProgress(rows, "2026-11", (await load()).budgets).find((b) => b.category === "Bills")!;
   assert.equal(bills.status, "near"); // 850 of the 1000 demo limit
   assert.equal(bills.spent, 850);
 });
@@ -252,48 +259,48 @@ test("user category corrections survive re-sync and apply to similar future tran
   const f = fakeNessie();
   await syncBanking(U, { config: cfg(f.impl) });
   const id = "nessie:purchase:fallback-pur-0008";
-  assert.equal(banking.get(U, id)!.category, "Uncategorized");
-  assert.throws(() => banking.setCategory(U, id, "Shopping", "ai" as "user"));
-  banking.setCategory(U, id, "Shopping", "user");
+  assert.equal((await getTx(id))!.category, "Uncategorized");
+  assert.ok(BANKING_TOOL_DECLARATIONS.every((d) => !/set|update|delete|write/i.test(d.name)), "AI tools are read-only; only explicit user actions change categories");
+  await memoryBanking.setCategory(U, id, "Shopping");
   await syncBanking(U, { config: cfg(f.impl) });
-  const after = banking.get(U, id)!;
+  const after = (await getTx(id))!;
   assert.equal(after.category, "Shopping");
   assert.equal(after.categorySource, "user");
   assert.ok(!after.reviewReasons.some((r) => /category/i.test(r)));
   const snap = fallbackSnapshot();
   cardList(snap).push({ id: "fallback-pur-0100", kind: "purchase", status: "completed", medium: "balance", merchant_id: "fallback-m-misc", created_at: at("2026-11-20"), amount_cents: 1200, description: "QX*8812 PAYMENT", payer_id: "fallback-acct-creditcard01" });
   await syncBanking(U, { config: cfg(fakeNessie(snap).impl) });
-  const fresh = banking.get(U, "nessie:purchase:fallback-pur-0100")!;
+  const fresh = (await getTx("nessie:purchase:fallback-pur-0100"))!;
   assert.equal(fresh.category, "Shopping");
   assert.equal(fresh.categorySource, "user");
-  assert.throws(() => banking.setCategory(U, "nessie:transfer:fallback-tr-0001", "Shopping", "user"), /Transfers/);
-  assert.throws(() => banking.setCategory(U, "nessie:purchase:fallback-pur-0009", "Shopping", "user"), /isn.t counted/);
+  await assert.rejects(memoryBanking.setCategory(U, "nessie:transfer:fallback-tr-0001", "Shopping"), /Transfers/);
+  await assert.rejects(memoryBanking.setCategory(U, "nessie:purchase:fallback-pur-0009", "Shopping"), /isn.t counted/);
 });
 
 // ---------- FinPilot access ----------
 test("FinPilot tools return stored and calculated data with provenance", async () => {
-  assert.match(String((runBankingTool(U, "monthly_income_expenses") as { error: string }).error), /No banking data/);
+  assert.match(String((runBankingTool(await load(), U, "monthly_income_expenses") as { error: string }).error), /No banking data/);
   await syncBanking(U, { config: null });
-  const r = runBankingTool(U, "monthly_income_expenses", { month: "2026-11" }) as { dataSource: { provider: string; live: boolean; label: string }; kind: string; result: { netCashFlow: number } };
+  const r = runBankingTool(await load(), U, "monthly_income_expenses", { month: "2026-11" }) as { dataSource: { provider: string; live: boolean; label: string }; kind: string; result: { netCashFlow: number } };
   assert.equal(r.result.netCashFlow, 497.63);
   assert.equal(r.dataSource.provider, "fallback");
   assert.equal(r.dataSource.live, false);
   assert.match(r.dataSource.label, /Fictional/);
   assert.equal(r.kind, "calculated from stored rows");
-  const tx = runBankingTool(U, "get_transactions", { query: "freshmart", limit: 5 }) as { transactions: { amount: number }[] };
+  const tx = runBankingTool(await load(), U, "get_transactions", { query: "freshmart", limit: 5 }) as { transactions: { amount: number }[] };
   assert.deepEqual(tx.transactions.map((t) => t.amount), [91.12, 82.3]);
-  assert.match(String((runBankingTool(U, "delete_everything") as { error: string }).error), /Unknown tool/);
-  const answer = offlineBankingAnswer(U, "How much did I spend this month?")!;
+  assert.match(String((runBankingTool(await load(), U, "delete_everything") as { error: string }).error), /Unknown tool/);
+  const answer = offlineBankingAnswer(await load(), U, "How much did I spend this month?")!;
   assert.match(answer, /\$952\.37/);
   assert.match(answer, /Fictional sample data/);
-  assert.equal(offlineBankingAnswer(U, "What is a W-2?"), null);
+  assert.equal(offlineBankingAnswer(await load(), U, "What is a W-2?"), null);
 });
 
 test("FinPilot sees sandbox accounts, bills and loans from Nessie", async () => {
   const s = fallbackSnapshot();
   s.bills.push({ id: "bill-9", account_id: "fallback-acct-checking0001", status: "recurring", payee: "StreamFlix", payment_amount: 15.49, upcoming_payment_date: "2026-12-01", creation_date: "2026-09-01", created_at: at("2026-09-01"), updated_at: at("2026-09-01") });
   await syncBanking(U, { config: cfg(fakeNessie(s).impl) });
-  const r = runBankingTool(U, "accounts_bills_loans") as { dataSource: { live: boolean }; accounts: { type: string; balance: number; creditLimit: number | null }[]; bills: { payee: string; amount: number }[] };
+  const r = runBankingTool(await load(), U, "accounts_bills_loans") as { dataSource: { live: boolean }; accounts: { type: string; balance: number; creditLimit: number | null }[]; bills: { payee: string; amount: number }[] };
   assert.equal(r.dataSource.live, true);
   assert.deepEqual(r.accounts.find((a) => a.type === "Credit Card"), { type: "Credit Card", nickname: "Starter card (sample)", balance: 312, available: 688, creditLimit: 1000, last4: "0003" });
   assert.deepEqual(r.bills, [{ payee: "StreamFlix", nickname: null, status: "recurring", amount: 15.49, upcomingPaymentDate: "2026-12-01", recurringDay: null }]);
@@ -309,21 +316,21 @@ test("empty Nessie sandbox ({items:[]}) is a success: no fictional data, clear e
   assert.equal(r.accounts, 0);
   assert.match(r.label, /no accounts yet/);
   assert.ok(!r.warnings.some((w) => /unavailable/.test(w)));
-  assert.equal(banking.transactions(U).length, 0, "no fallback rows were stored");
-  const ov = bankingOverview(U);
+  assert.equal((await txs()).length, 0, "no fallback rows were stored");
+  const ov = bankingOverview(await load(), U);
   assert.equal(ov.source!.nessieStatus, "empty");
   assert.equal(ov.transactions.length, 0);
-  assert.match(String((runBankingTool(U, "monthly_income_expenses") as { error: string }).error), /no accounts yet.*not an error/);
-  assert.match(offlineBankingAnswer(U, "How much did I spend this month?")!, /no accounts yet/);
+  assert.match(String((runBankingTool(await load(), U, "monthly_income_expenses") as { error: string }).error), /no accounts yet.*not an error/);
+  assert.match(offlineBankingAnswer(await load(), U, "How much did I spend this month?")!, /no accounts yet/);
 });
 
 test("sandbox emptied after an import: stale Nessie rows are removed, not shown as current", async () => {
   await syncBanking(U, { config: cfg(fakeNessie().impl) });
-  assert.ok(banking.transactions(U).length > 0);
+  assert.ok((await txs()).length > 0);
   const empty: Snap = { ...fallbackSnapshot(), accounts: [], transactions: [], merchants: [] };
   await syncBanking(U, { config: cfg(fakeNessie(empty).impl) });
-  assert.equal(banking.transactions(U).filter((t) => t.provider === "nessie").length, 0);
-  assert.equal(banking.accounts(U).filter((a) => a.provider === "nessie").length, 0);
+  assert.equal((await txs()).filter((t) => t.provider === "nessie").length, 0);
+  assert.equal((await load()).accounts.filter((a) => a.provider === "nessie").length, 0);
 });
 
 test("API failure (500) is an error: labelled fictional fallback, never presented as API data", async () => {
@@ -346,7 +353,7 @@ test("Nessie down (network): labelled fictional fallback, never presented as API
   assert.equal(r.live, false);
   assert.match(r.label, /Fictional/);
   assert.ok(r.warnings.some((w) => /Nessie unavailable: Nessie network error/.test(w)));
-  assert.equal(bankingOverview(U).source!.live, false);
+  assert.equal(bankingOverview(await load(), U).source!.live, false);
 });
 
 test("not configured: labelled fictional fallback with the reason", async () => {
@@ -365,8 +372,8 @@ test("Nessie down after a good import keeps showing stored Nessie rows, not fall
   assert.equal(r.live, false);
   assert.equal(r.nessieStatus, "error");
   assert.match(r.label, /previously imported/);
-  assert.ok(activeRows(U).rows.every((t) => t.provider === "nessie"));
-  assert.ok(!banking.transactions(U).some((t) => t.provider === "fallback"));
+  assert.ok(activeRows(await load()).rows.every((t) => t.provider === "nessie"));
+  assert.ok(!(await txs()).some((t) => t.provider === "fallback"));
 });
 
 // ---------- SQL migration (Supabase) in PGlite ----------
@@ -375,7 +382,7 @@ test("migration: upsert is idempotent, keeps user categories, and enforces RLS",
   const B = "22222222-2222-2222-2222-222222222222";
   const db = new PGlite();
   await db.exec(`
-    create role anon nologin; create role authenticated nologin;
+    create role anon nologin; create role authenticated nologin; create role service_role nologin;
     create schema auth; create table auth.users (id uuid primary key);
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     grant usage on schema auth to anon, authenticated; grant execute on function auth.uid() to anon, authenticated;

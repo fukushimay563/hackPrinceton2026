@@ -19,7 +19,7 @@ Everything works with **no keys at all** (sample data, offline FinPilot, progres
 npm install
 cp .env.example .env.local   # optional
 npm run dev                  # http://localhost:3000
-npm test                     # 106 tests: engines, question minimizer, Academy, agents/Photon/security, database RLS
+npm test                     # 118 tests: engines, question minimizer, Academy, agents/Photon/security, database RLS
 ```
 
 Requires Node 20.9+.
@@ -35,6 +35,8 @@ Requires Node 20.9+.
 4. Deploy. Open `https://<your-app>.vercel.app/api/health` to see which integrations are on (it shows true/false only, never values).
 
 **Which Gemini model is live?** Run `node scripts/check-gemini.mjs https://<your-app>.vercel.app`. It calls `/api/health?check=gemini` and prints the model the server resolved, whether it came from `GEMINI_MODEL` or the fallback, the model version Google says served the test call, and the deployment's environment, branch and commit. Every advisor answer also logs one `ai.model` line in the Vercel function logs (path, requested model, source, served-by, Gemini vs offline guides; never the question, answer, figures or key). Environment variable changes only apply to deployments made after the change, so redeploy after editing `GEMINI_MODEL`.
+
+**Is My Budget reading persisted records?** Banking data is stored in Supabase (server-side, service-role key) so every serverless instance shows the same records. Apply the migrations in `supabase/migrations/` in filename order, set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_SECRET_KEY`) for the server, redeploy, then run `node scripts/check-banking.mjs https://<your-app>.vercel.app`: it checks a live database write + read-back, that every banking table and function exists, that Nessie answers, and how many accounts/transactions My Budget returns (counts only).
 
 **Is production really reading Nessie v2?** Run `node scripts/check-nessie.mjs https://<your-app>.vercel.app` (or open `/api/health?check=nessie`). The server makes one read-only `GET /accounts?limit=1` with its own key and reports the API host, HTTP status and whether the sandbox has accounts: `ok`, `empty` (connected, no data yet) or an error. My Budget shows the same state in its banner, and each sync logs `nessie.request` (endpoint, status, record count) and `nessie.sync` lines in the Vercel function logs, never the key or account data.
 

@@ -1,24 +1,29 @@
-// Banking storage. Same pattern as lib/agents/store.ts: an in-memory, globalThis-scoped
-// default (demo + tests) whose semantics mirror supabase/migrations/*_banking.sql:
-//   unique (user_id, provider, external_id)  → repeated syncs never duplicate rows
-//   category_source = 'user' is never overwritten by a sync → user corrections survive
-// Category corrections are persisted through the existing personalization memory
-// (store.remember(tenant, "correction", …)), so they apply to similar future imports.
-import { store } from "../agents/store";
+// Banking storage behind one async interface:
+//   • SupabaseBankingStore (production): Postgres via the service role, see supabaseStore.ts and
+//     supabase/migrations/*_banking*.sql — every serverless instance reads the same records.
+//   • MemoryBankingStore (tests / local without Supabase): globalThis-scoped Maps with the
+//     SAME semantics (idempotent upsert keyed by (user, id); category_source = 'user' is never
+//     overwritten; stale provider rows pruned after a successful read).
+// Reads return one BankingData object per request; overview, FinPilot tools and the card
+// feed are pure functions over it.
+import { log } from "../agents/logger";
+import { store as agentStore } from "../agents/store";
 import { merchantKey, type Corrections } from "./normalize";
+import { supabaseBankingStoreFromEnv } from "./supabaseStore";
 import type { Budgets } from "./analytics";
-import type { BankAccount, BankBill, BankLoan, BankTransaction, BudgetCategory, Provider, SyncReport } from "./types";
+import type { BankAccount, BankBill, BankLoan, BankTransaction, BudgetCategory, SyncReport } from "./types";
 
-export const DEMO_BANK_USER = "tenant_demo_maya";
+export { DEMO_BANK_USER, DEMO_BUDGETS, BankingStoreError, BankingRuleError, cleanBudgets, defaultBudgets } from "./storeCore";
+export type { BankingData, SyncWrite, WriteCounts, BankingStore } from "./storeCore";
+import { BankingRuleError, cleanBudgets, defaultBudgets, type BankingData, type BankingStore, type SyncWrite, type WriteCounts } from "./storeCore";
 
-/** Demo budgets for the demo user only. Labelled as such in the UI; users can change them. */
-export const DEMO_BUDGETS: Budgets = { Food: 200, Groceries: 250, Shopping: 150, Transport: 120, Subscriptions: 40, Entertainment: 80, Bills: 1000 };
-
+// ------------------------------------------------------------------ in-memory
 type UserData = {
   accounts: Map<string, BankAccount>;
   txs: Map<string, BankTransaction>;
   bills: BankBill[];
   loans: BankLoan[];
+  rules: Corrections;
   budgets: Budgets | null;
   lastSync: SyncReport | null;
 };
@@ -26,26 +31,37 @@ type UserData = {
 // Fields owned by the provider. A sync may update these; it never touches user-owned fields.
 const PROVIDER_FIELDS = ["date", "amount", "direction", "description", "merchant", "status", "accountId", "kind"] as const;
 
-class BankingRepository {
+export class MemoryBankingStore implements BankingStore {
+  readonly backend = "memory" as const;
   private users = new Map<string, UserData>();
 
   private u(userId: string): UserData {
     if (!userId) throw new Error("userId required");
     let d = this.users.get(userId);
-    if (!d) this.users.set(userId, (d = { accounts: new Map(), txs: new Map(), bills: [], loans: [], budgets: null, lastSync: null }));
+    if (!d) this.users.set(userId, (d = { accounts: new Map(), txs: new Map(), bills: [], loans: [], rules: new Map(), budgets: null, lastSync: null }));
     return d;
   }
 
-  upsertAccounts(userId: string, accounts: BankAccount[]) {
+  async load(userId: string): Promise<BankingData> {
     const d = this.u(userId);
-    for (const a of accounts) d.accounts.set(a.id, { ...a, userId });
+    return {
+      accounts: [...d.accounts.values()].map((a) => ({ ...a })),
+      transactions: [...d.txs.values()].map((t) => ({ ...t, reviewReasons: [...t.reviewReasons] })),
+      bills: d.bills.map((b) => ({ ...b })),
+      loans: d.loans.map((l) => ({ ...l })),
+      budgets: defaultBudgets(userId, d.budgets),
+      corrections: new Map(d.rules),
+      lastSync: d.lastSync ? structuredClone(d.lastSync) : null,
+    };
   }
 
-  /** Idempotent upsert keyed by (provider, kind, externalId) for this user. */
-  upsertTransactions(userId: string, rows: BankTransaction[]) {
+  async applySync(userId: string, w: SyncWrite): Promise<WriteCounts> {
     const d = this.u(userId);
-    let inserted = 0, updated = 0, unchanged = 0;
-    for (const row of rows) {
+    for (const a of w.accounts) d.accounts.set(a.id, { ...a, userId });
+    let inserted = 0,
+      updated = 0,
+      unchanged = 0;
+    for (const row of w.transactions) {
       const prev = d.txs.get(row.id);
       if (!prev) {
         d.txs.set(row.id, { ...row, userId });
@@ -59,110 +75,92 @@ class BankingRepository {
         next.reviewReasons = row.reviewReasons.filter((r) => !/category/i.test(r));
         next.needsReview = next.reviewReasons.length > 0;
       }
-      const changed =
-        PROVIDER_FIELDS.some((f) => prev[f] !== next[f]) || prev.category !== next.category || prev.flow !== next.flow || prev.needsReview !== next.needsReview;
+      const changed = PROVIDER_FIELDS.some((f) => prev[f] !== next[f]) || prev.category !== next.category || prev.flow !== next.flow || prev.needsReview !== next.needsReview;
       d.txs.set(row.id, next);
       if (changed) updated++;
       else unchanged++;
     }
-    return { inserted, updated, unchanged };
+    if (w.prune) {
+      const keepA = new Set(w.accounts.map((a) => a.id));
+      const keepT = new Set(w.transactions.map((t) => t.id));
+      for (const [id, a] of d.accounts) if (a.provider === w.provider && !keepA.has(id)) d.accounts.delete(id);
+      for (const [id, t] of d.txs) if (t.provider === w.provider && !keepT.has(id)) d.txs.delete(id);
+    }
+    if (w.bills) d.bills = [...d.bills.filter((b) => b.provider !== w.provider), ...w.bills];
+    if (w.loans) d.loans = [...d.loans.filter((l) => l.provider !== w.provider), ...w.loans];
+    const counts = { inserted, updated, unchanged };
+    d.lastSync = { ...w.report, ...counts } as SyncReport;
+    return counts;
   }
 
-  /**
-   * After a SUCCESSFUL provider read, drop that provider's accounts and rows that the
-   * provider no longer returns (e.g. the sandbox was cleared), so stale records are never
-   * shown as current. User category rules live in personalization memory and survive.
-   */
-  pruneProvider(userId: string, provider: Provider, keepAccountIds: Set<string>, keepTxIds: Set<string>): number {
-    const d = this.u(userId);
-    let removed = 0;
-    for (const [id, a] of d.accounts) if (a.provider === provider && !keepAccountIds.has(id)) d.accounts.delete(id);
-    for (const [id, t] of d.txs)
-      if (t.provider === provider && !keepTxIds.has(id)) {
-        d.txs.delete(id);
-        removed++;
-      }
-    return removed;
-  }
-
-  /** Bills and loans are replaced wholesale on each successful read (read-only, no user fields). */
-  setObligations(userId: string, provider: Provider, bills: BankBill[], loans: BankLoan[]) {
-    const d = this.u(userId);
-    d.bills = [...d.bills.filter((b) => b.provider !== provider), ...bills];
-    d.loans = [...d.loans.filter((l) => l.provider !== provider), ...loans];
-  }
-
-  bills(userId: string): BankBill[] {
-    return [...this.u(userId).bills];
-  }
-
-  loans(userId: string): BankLoan[] {
-    return [...this.u(userId).loans];
-  }
-
-  accounts(userId: string): BankAccount[] {
-    return [...this.u(userId).accounts.values()];
-  }
-
-  transactions(userId: string): BankTransaction[] {
-    return [...this.u(userId).txs.values()];
-  }
-
-  get(userId: string, id: string): BankTransaction | undefined {
-    return this.u(userId).txs.get(id);
-  }
-
-  /** Explicit user correction. Persists the rule to personalization memory; AI suggestions never call this. */
-  setCategory(userId: string, id: string, category: BudgetCategory, by: "user"): BankTransaction {
-    if (by !== "user") throw new Error("Only explicit user corrections are saved");
+  async setCategory(userId: string, id: string, category: BudgetCategory): Promise<BankTransaction> {
     const d = this.u(userId);
     const t = d.txs.get(id);
-    if (!t) throw new Error("Transaction not found");
-    if (t.flow === "transfer") throw new Error("Transfers between your own accounts aren't spending, so they have no spending category");
-    if (t.flow === "excluded") throw new Error("This transaction isn't counted (cancelled or an external transfer), so its category can't change the budget");
+    if (!t) throw new BankingRuleError("Transaction not found");
+    if (t.flow === "transfer") throw new BankingRuleError("Transfers between your own accounts aren't spending, so they have no spending category");
+    if (t.flow === "excluded") throw new BankingRuleError("This transaction isn't counted (cancelled or an external transfer), so its category can't change the budget");
     const reviewReasons = t.reviewReasons.filter((r) => !/category/i.test(r));
     const next: BankTransaction = { ...t, category, categorySource: "user", reviewReasons, needsReview: reviewReasons.length > 0 };
     d.txs.set(id, next);
     const key = merchantKey(t.merchant ?? t.description);
-    if (key) store.remember(userId, "correction", { type: "transaction_category", merchantKey: key, category, transactionId: id });
-    store.addAudit(userId, "user", "banking.category.corrected", { transactionId: id, category });
-    return next;
+    if (key) d.rules.set(key, category);
+    return { ...next };
   }
 
-  /** Latest user-approved category per merchant, from personalization memory. */
-  corrections(userId: string): Corrections {
-    const map: Corrections = new Map();
-    for (const m of store.recall(userId, "correction").sort((a, b) => a.at - b.at)) {
-      const p = m.payload as { type?: string; merchantKey?: string; category?: BudgetCategory };
-      if (p.type === "transaction_category" && p.merchantKey && p.category) map.set(p.merchantKey, p.category);
-    }
-    return map;
-  }
-
-  budgets(userId: string): Budgets {
-    const d = this.u(userId);
-    return d.budgets ?? (userId === DEMO_BANK_USER ? DEMO_BUDGETS : {});
-  }
-
-  setBudgets(userId: string, budgets: Budgets) {
-    const clean: Budgets = {};
-    for (const [k, v] of Object.entries(budgets)) if (typeof v === "number" && Number.isFinite(v) && v >= 0) clean[k as BudgetCategory] = Math.round(v * 100) / 100;
+  async setBudgets(userId: string, budgets: Budgets): Promise<Budgets> {
+    const clean = cleanBudgets(budgets);
     this.u(userId).budgets = clean;
+    return clean;
   }
 
-  setLastSync(userId: string, r: SyncReport) {
-    this.u(userId).lastSync = r;
-  }
-
-  lastSync(userId: string): SyncReport | null {
-    return this.u(userId).lastSync;
-  }
-
-  /** Tests only. */
+  /** Tests only: forget everything (like a fresh serverless instance would). */
   _reset() {
     this.users.clear();
   }
 }
 
-const g = globalThis as unknown as { __ffBanking?: BankingRepository };
-export const banking: BankingRepository = (g.__ffBanking ??= new BankingRepository());
+// ------------------------------------------------------------------ selection
+const g = globalThis as unknown as { __ffBankingMemory?: MemoryBankingStore; __ffBankingStore?: BankingStore | null };
+export const memoryBanking: MemoryBankingStore = (g.__ffBankingMemory ??= new MemoryBankingStore());
+
+let overrideStore: BankingStore | null = null;
+/** Tests: force a specific store (e.g. a Supabase store over PGlite). Pass null to restore. */
+export function setBankingStoreForTests(s: BankingStore | null) {
+  overrideStore = s;
+}
+
+/**
+ * Supabase when the server has SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) and a service-role /
+ * secret key, unless BANKING_STORE=memory. Otherwise the in-memory store (with a warning in
+ * production, because records then live only in one serverless instance).
+ */
+export function bankingStore(): BankingStore {
+  if (overrideStore) return overrideStore;
+  if (g.__ffBankingStore) return g.__ffBankingStore;
+  const forced = process.env.BANKING_STORE?.trim().toLowerCase();
+  let s: BankingStore = memoryBanking;
+  if (forced !== "memory") {
+    s = supabaseBankingStoreFromEnv() ?? memoryBanking;
+  }
+  if (s.backend === "memory" && process.env.NODE_ENV === "production" && process.env.VERCEL) {
+    log("warn", "banking.store.memory_in_production", { reason: "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set; records are per-instance" });
+  }
+  g.__ffBankingStore = s;
+  return s;
+}
+
+/** Tests: drop the cached choice so env changes take effect. */
+export function _resetBankingStoreChoice() {
+  g.__ffBankingStore = null;
+}
+
+/** Personalization memory + audit trail for an explicit correction (best effort, non-blocking). */
+export function recordCorrection(userId: string, t: BankTransaction, category: BudgetCategory) {
+  try {
+    const key = merchantKey(t.merchant ?? t.description);
+    if (key) agentStore.remember(userId, "correction", { type: "transaction_category", merchantKey: key, category, transactionId: t.id });
+    agentStore.addAudit(userId, "user", "banking.category.corrected", { transactionId: t.id, category });
+  } catch {
+    /* personalization is optional */
+  }
+}

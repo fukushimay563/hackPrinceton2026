@@ -3,7 +3,7 @@
 // stored data instead of inventing figures. Writes (e.g. category changes) are NOT exposed.
 import { budgetProgress, filterTransactions, monthlySummary, recurringCandidates, spendingByCategory, availableMonths } from "./analytics";
 import { activeRows } from "./overview";
-import { banking } from "./repository";
+import type { BankingData } from "./storeCore";
 
 export const BANKING_TOOL_DECLARATIONS = [
   {
@@ -50,21 +50,22 @@ export const BANKING_TOOL_DECLARATIONS = [
 export type BankingToolName = (typeof BANKING_TOOL_DECLARATIONS)[number]["name"];
 const NAMES = new Set<string>(BANKING_TOOL_DECLARATIONS.map((d) => d.name));
 
-export function runBankingTool(userId: string, name: string, args: Record<string, unknown> = {}) {
+/** Runs a tool over ONE loaded BankingData (persisted records), so answers never depend on server memory. */
+export function runBankingTool(data: BankingData, userId: string, name: string, args: Record<string, unknown> = {}) {
   if (!NAMES.has(name)) return { error: `Unknown tool ${name}` };
-  const last = banking.lastSync(userId);
-  const { provider, rows } = activeRows(userId);
+  const last = data.lastSync;
+  const { provider, rows } = activeRows(data);
   if (last?.nessieStatus === "empty")
     return { error: "The Capital One Nessie sandbox is connected but has no accounts yet, so there is no banking data to analyze. This is an empty sandbox, not an error. Don't invent figures." };
   const dataSource = last ? { provider: last.provider, live: last.live, nessieStatus: last.nessieStatus, label: last.label } : null;
   if (last && name === "accounts_bills_loans") {
-    const accounts = banking.accounts(userId).filter((a) => a.provider === provider);
+    const accounts = data.accounts.filter((a) => a.provider === provider);
     return {
       dataSource,
       kind: "verified stored records",
       accounts: accounts.map((a) => ({ type: a.type, nickname: a.nickname, balance: a.balance, available: a.available, creditLimit: a.creditLimit, last4: a.last4 })),
-      bills: banking.bills(userId).filter((b) => b.provider === provider).map(({ payee, nickname, status, amount, upcomingPaymentDate, recurringDay }) => ({ payee, nickname, status, amount, upcomingPaymentDate, recurringDay })),
-      loans: banking.loans(userId).filter((l) => l.provider === provider).map(({ type, status, description, amount, monthlyPayment, creditScore }) => ({ type, status, description, amount, monthlyPayment, creditScore })),
+      bills: data.bills.filter((b) => b.provider === provider).map(({ payee, nickname, status, amount, upcomingPaymentDate, recurringDay }) => ({ payee, nickname, status, amount, upcomingPaymentDate, recurringDay })),
+      loans: data.loans.filter((l) => l.provider === provider).map(({ type, status, description, amount, monthlyPayment, creditScore }) => ({ type, status, description, amount, monthlyPayment, creditScore })),
     };
   }
   if (!last || !rows.length) return { error: "No banking data has been imported yet. The user can import demo data on the My Budget page." };
@@ -97,7 +98,7 @@ export function runBankingTool(userId: string, name: string, args: Record<string
     case "accounts_bills_loans":
       return { error: "No banking data has been imported yet." };
     case "budget_progress": {
-      const budgets = banking.budgets(userId);
+      const budgets = data.budgets;
       return { dataSource, kind: "calculated from stored rows and the user's budget limits", month: m, budgetsAreDemoDefaults: userId === "tenant_demo_maya", result: budgetProgress(rows, m, budgets) };
     }
   }
@@ -106,14 +107,18 @@ export function runBankingTool(userId: string, name: string, args: Record<string
 const money = (n: number) => `$${n.toFixed(2)}`;
 
 /** Deterministic answer used when Gemini is unavailable. Returns null if the question isn't about the user's banking data. */
-export function offlineBankingAnswer(userId: string, question: string): string | null {
-  if (!/\b(spend|spent|spending|budget|income|expense|transaction|recurring|subscription|cash ?flow|categor|bank|purchase|deposit)/i.test(question)) return null;
-  const s = runBankingTool(userId, "monthly_income_expenses") as Record<string, unknown>;
+export function isBankingQuestion(question: string): boolean {
+  return /\b(spend|spent|spending|budget|income|expense|transaction|recurring|subscription|cash ?flow|categor|bank|purchase|deposit)/i.test(question);
+}
+
+export function offlineBankingAnswer(data: BankingData, userId: string, question: string): string | null {
+  if (!isBankingQuestion(question)) return null;
+  const s = runBankingTool(data, userId, "monthly_income_expenses") as Record<string, unknown>;
   if ("error" in s) return String(s.error).replace(" Don't invent figures.", "");
   const src = (s.dataSource as { label: string } | null)?.label ?? "stored data";
   const r = s.result as ReturnType<typeof monthlySummary>;
-  const cats = (runBankingTool(userId, "spending_by_category") as { result: ReturnType<typeof spendingByCategory> }).result.slice(0, 3);
-  const rec = (runBankingTool(userId, "recurring_expenses") as { result: ReturnType<typeof recurringCandidates> }).result;
+  const cats = (runBankingTool(data, userId, "spending_by_category") as { result: ReturnType<typeof spendingByCategory> }).result.slice(0, 3);
+  const rec = (runBankingTool(data, userId, "recurring_expenses") as { result: ReturnType<typeof recurringCandidates> }).result;
   const parts = [
     `For ${r.month} (calculated from your stored transactions): income ${money(r.income)}, spending ${money(r.netSpending)} after ${money(r.refunds)} in refunds, net cash flow ${money(r.netCashFlow)}. Transfers between your own accounts (${money(r.transfersExcluded)}) aren't counted.`,
     cats.length ? `Top categories: ${cats.map((c) => `${c.category} ${money(c.amount)}`).join(", ")}.` : "",
