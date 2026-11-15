@@ -72,7 +72,7 @@ iMessage ─► Photon 2.0 (Beta) ─► POST /api/photon/webhook   (event: mess
 ```bash
 npm install
 npm run dev                 # open http://localhost:3000/agents
-npm test                    # 88 tests (7 files)
+npm test                    # 97 tests (8 files)
 ```
 
 **Two-minute demo (mock mode, synthetic data):**
@@ -92,7 +92,9 @@ npm test                    # 88 tests (7 files)
 How texts are routed (`src/lib/photon/handler.ts`):
 - **General money/tax questions** ("what is a W-2?", "how does APR work?") from any number → **FinPilot** (`src/lib/tutor/answer.ts`, the same engine as the web chat) with **no personal context and no banking tools**. Plain text, citation markers removed, up to 2 source links. Public rule amounts (e.g. the standard deduction) are allowed; identifiers never are.
 - **Questions about the asker's own return** (my refund / W-2 / status / estimate) or an answer to a pending question → the **Deep Agents supervisor**, linked numbers only. Unlinked numbers get the link prompt.
-- `STOP` / `START` / `HELP` work for every number, linked or not. Numbers in `PHOTON_DEMO_NUMBERS` are linked to the **synthetic demo taxpayer** (replies say "Demo data") with notifications off.
+- `STOP` / `START` / `HELP` work for every number, linked or not. Numbers in `PHOTON_DEMO_NUMBERS` are linked to the **synthetic demo taxpayer** (replies say "Demo data"; HELP says DEMO) with notifications off. Matching uses the **sender's** handle (Photon `sentBy`, never the shared line), normalized to E.164 on both sides (`src/lib/photon/handles.mjs`), and runs before the linked-account check; a number already linked to a real account keeps that link.
+- Demo-number checklist: (1) the number is in `PHOTON_DEMO_NUMBERS` for the **Production** environment and the deployment was made **after** that change (`/api/health` shows `photon.demoNumbersConfigured`); (2) the number has an active **shared-line assignment** in Photon (`node scripts/check-photon.mjs` checks this if the key has `platforms:read`); (3) if the phone sends iMessage from an Apple ID email, add that email too.
+- Diagnostics (Vercel function logs, no full numbers, keys, texts or taxpayer data): `photon.webhook.received` → `photon.webhook.verified` / `photon.webhook.rejected` (reason) → `photon.inbound.identity` (masked sender, `demoNumber`, `linked`, `demoTenant`) → `photon.reply.sent` / `photon.reply.failed` (Photon status + problem code) → `photon.webhook.handled`.
 - Replies go out from the line that received the message, threaded to it (`parentMessageId`). Approved-estimate notifications go only to opted-in, non-stopped users, into their existing direct conversation.
 
 Activation:

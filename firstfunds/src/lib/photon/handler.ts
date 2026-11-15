@@ -8,6 +8,7 @@ import { runSupervisor, type RunResult } from "../agents/supervisor";
 import { store } from "../agents/store";
 import { DEMO_TENANT, ensureDemoDocuments } from "../agents/documents";
 import { answerQuestion, GENERAL_CONTEXT } from "../tutor/answer";
+import { demoHandles, maskHandle, normalizeHandle } from "./handles.mjs";
 
 export type InboundMessage = {
   /** Photon message id (dedupe key). */
@@ -61,13 +62,14 @@ export async function sendSafely(sender: Sender, tenant: string, spaceId: string
       return { text, status: "sent" };
     } catch (e) {
       item.lastError = e instanceof Error ? e.message.slice(0, 120) : "send failed";
+      log("warn", "photon.reply.attempt_failed", { key, attempt: i + 1, mode: sender.mode, error: item.lastError });
       store.outboxPut({ ...item, text, status: "queued" });
       if (i + 1 < attempts) await new Promise((ok) => setTimeout(ok, 50 * 2 ** i));
     }
   }
   store.outboxPut({ ...item, text, status: "failed" });
   store.addAudit(tenant, "system", "photon.delivery_failed", { key, attempts: item.attempts });
-  log("error", "photon.reply.failed", { key, attempts: item.attempts });
+  log("error", "photon.reply.failed", { key, attempts: item.attempts, mode: sender.mode, error: item.lastError });
   return { text, status: "failed" };
 }
 
@@ -112,14 +114,13 @@ export function formatForMessage(answer: string, sources: { title: string; url: 
   return links.length ? `${text}\n\nSources:\n${links.join("\n")}` : text;
 }
 
-/** Numbers listed in PHOTON_DEMO_NUMBERS are linked to the synthetic demo taxpayer (judging/demo only). */
-function demoNumbers(): Set<string> {
-  return new Set((process.env.PHOTON_DEMO_NUMBERS ?? "").split(",").map((n) => n.trim()).filter(Boolean));
-}
 
 // Opt-outs from numbers that never linked an account still have to be honoured.
 const gu = globalThis as unknown as { __ffUnlinkedStops?: Set<string> };
 const unlinkedStops = (gu.__ffUnlinkedStops ??= new Set<string>());
+
+const DEMO_HELP_TEXT =
+  "FirstFunds DEMO by text. This number uses a synthetic demo taxpayer (not a real person or return). Try \"Is my 2025 return ready?\" or ask any money question like \"what is a W-2?\". Never text real SSNs, account numbers or documents. Reply STOP to opt out.";
 
 const HELP_TEXT =
   "FirstFunds by text: ask any money or tax question (\"what is a W-2?\", \"how does APR work?\"). Questions about your own return need a linked number. Never text your SSN, account numbers or documents. Reply STOP to opt out.";
@@ -143,29 +144,47 @@ export async function handleInbound(msg: InboundMessage, sender: Sender): Promis
     log("info", "photon.inbound.duplicate", { eventId: msg.eventId });
     return { status: "duplicate", replies: [] };
   }
-  if (!msg.text || !msg.senderId) return { status: "ignored", replies: [] };
-  const text = msg.text.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, MAX_TEXT);
-
-  // 2. Identity: only linked numbers reach a taxpayer's data. Demo numbers (env) map to
-  //    the synthetic demo taxpayer, never to a real person's record.
-  let link = store.phoneLink(msg.senderId);
-  if (!link && demoNumbers().has(msg.senderId)) {
-    ensureDemoDocuments();
-    store.linkPhone(msg.senderId, DEMO_TENANT, false); // replies only; no proactive notifications
-    link = store.phoneLink(msg.senderId);
+  // Canonical sender handle (E.164 phone or lowercase Apple ID email). This is the
+  // person who texted us (Photon's sentBy), never our shared line (receivedBy).
+  const handle = normalizeHandle(msg.senderId);
+  if (!msg.text || !handle) {
+    log("info", "photon.inbound.ignored", { eventId: msg.eventId, reason: !handle ? "no-sender-handle" : "no-text" });
+    return { status: "ignored", replies: [] };
   }
+  const rawText = msg.text;
+  msg = { ...msg, senderId: handle };
+  const text = rawText.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, MAX_TEXT);
+
+  // 2. Identity. Demo numbers (PHOTON_DEMO_NUMBERS) are checked BEFORE the linked-account
+  //    check and map to the synthetic demo taxpayer, never to a real person's record.
+  //    A number already linked to a real account keeps that link.
+  let link = store.phoneLink(handle);
+  const isDemoNumber = demoHandles().has(handle);
+  if (!link && isDemoNumber) {
+    ensureDemoDocuments();
+    store.linkPhone(handle, DEMO_TENANT, false); // replies only; no proactive notifications
+    link = store.phoneLink(handle);
+  }
+  log("info", "photon.inbound.identity", {
+    eventId: msg.eventId,
+    sender: maskHandle(handle),
+    demoNumber: isDemoNumber,
+    demoNumbersConfigured: demoHandles().size,
+    linked: !!link,
+    demoTenant: link?.tenant === DEMO_TENANT,
+  });
   const isStop = /^\s*(stop|unsubscribe|cancel|quit|end)\s*$/i.test(text);
   const isStart = /^\s*(start|unstop)\s*$/i.test(text);
   const isHelp = /^\s*(help|info)\s*$/i.test(text);
 
   if (!link) {
     if (isStop) {
-      unlinkedStops.add(msg.senderId);
+      unlinkedStops.add(handle);
       const reply = await sendSafely(sender, "unlinked", msg.spaceId, "You're unsubscribed from FirstFunds messages. Reply START to turn them back on.", `reply:${msg.eventId}`);
       return { status: "opted-out", replies: [reply] };
     }
-    if (isStart) unlinkedStops.delete(msg.senderId);
-    if (unlinkedStops.has(msg.senderId)) return { status: "stopped", replies: [] };
+    if (isStart) unlinkedStops.delete(handle);
+    if (unlinkedStops.has(handle)) return { status: "stopped", replies: [] };
     if (isHelp || isStart) {
       const reply = await sendSafely(sender, "unlinked", msg.spaceId, HELP_TEXT, `reply:${msg.eventId}`);
       return { status: isStart ? "opted-in" : "help", replies: [reply] };
@@ -180,18 +199,18 @@ export async function handleInbound(msg: InboundMessage, sender: Sender): Promis
 
   // 3. Consent keywords.
   if (isStop) {
-    store.setStopped(msg.senderId, true);
+    store.setStopped(handle, true);
     const reply = await sendSafely(sender, tenant, msg.spaceId, "You're unsubscribed from FirstFunds messages. Reply START to turn them back on.", `reply:${msg.eventId}`);
     return { status: "opted-out", replies: [reply] };
   }
   if (isStart) {
-    store.setStopped(msg.senderId, false);
+    store.setStopped(handle, false);
     const reply = await sendSafely(sender, tenant, msg.spaceId, "You're subscribed again. Ask me anything about your 2025 return.", `reply:${msg.eventId}`);
     return { status: "opted-in", replies: [reply] };
   }
   if (link.stopped) return { status: "stopped", replies: [] }; // no messages without consent
   if (isHelp) {
-    const reply = await sendSafely(sender, tenant, msg.spaceId, HELP_TEXT, `reply:${msg.eventId}`);
+    const reply = await sendSafely(sender, tenant, msg.spaceId, tenant === DEMO_TENANT ? DEMO_HELP_TEXT : HELP_TEXT, `reply:${msg.eventId}`);
     return { status: "help", replies: [reply] };
   }
 
@@ -233,7 +252,7 @@ export async function handleInbound(msg: InboundMessage, sender: Sender): Promis
   convo.pending = run.reply?.asks.includes("dependent") ? { kind: "dependent" } : null;
   convo.lastRunId = run.runId;
   convo.updatedAt = Date.now();
-  linkSpace(msg.senderId, msg);
+  linkSpace(handle, msg);
   return { status: "answered", route: "supervisor", run, replies: [reply] };
 }
 
@@ -255,6 +274,7 @@ export async function notify(
   runId: string,
   sender?: Sender,
 ): Promise<HandleResult["replies"][number] | { status: "no-consent" | "no-conversation" }> {
+  phone = normalizeHandle(phone) ?? phone;
   const link = store.phoneLink(phone);
   if (!link || !link.notifyConsent || link.stopped) return { status: "no-consent" };
   const route = spaces.get(phone);

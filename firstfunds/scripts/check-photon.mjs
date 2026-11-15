@@ -6,6 +6,7 @@
 //   node scripts/check-photon.mjs https://your.app      # also check the webhook points at your deployment
 import nextEnv from "@next/env";
 import { ApiError, Photon } from "@photon-ai/api";
+import { maskHandle, parseDemoNumbers } from "../src/lib/photon/handles.mjs";
 
 nextEnv.loadEnvConfig(process.cwd(), true, { info() {}, error: console.error });
 const id = process.env.PHOTON_PROJECT_ID?.trim();
@@ -13,7 +14,7 @@ const key = process.env.PHOTON_API_KEY?.trim();
 const secret = process.env.PHOTON_WEBHOOK_SECRET?.trim();
 const baseUrl = (process.env.PHOTON_API_URL?.trim() || "https://api.photon.codes").replace(/\/+$/, "");
 const appUrl = (process.argv[2] || process.env.APP_URL || "").replace(/\/+$/, "");
-const demo = (process.env.PHOTON_DEMO_NUMBERS ?? "").split(",").filter((n) => n.trim()).length;
+const demo = parseDemoNumbers(process.env.PHOTON_DEMO_NUMBERS);
 
 let ok = true;
 const row = (good, label, note = "") => {
@@ -28,7 +29,7 @@ row(!!secret && isWhsec(secret), "PHOTON_WEBHOOK_SECRET", secret ? (isWhsec(secr
 for (const old of ["SPECTRUM_PROJECT_ID", "SPECTRUM_PROJECT_SECRET", "SPECTRUM_WEBHOOK_SECRET"]) {
   if (process.env[old]) console.log(`! ${old} is a legacy Spectrum setting and is ignored. Remove it.`);
 }
-console.log(`  PHOTON_DEMO_NUMBERS: ${demo} number(s) linked to the synthetic demo taxpayer`);
+console.log(`  PHOTON_DEMO_NUMBERS: ${demo.handles.size} valid number(s) for the synthetic demo taxpayer${demo.handles.size ? ` (${[...demo.handles].map(maskHandle).join(", ")})` : ""}${demo.invalid ? `; ${demo.invalid} entry(ies) couldn't be read as a phone number or email` : ""}`);
 if (!id || !key) {
   console.log("\n→ Add the missing values to .env.local (Photon Beta dashboard → Settings for the project ID, API keys for the key). Until all three are set, the app runs Photon in mock mode.");
   process.exit(1);
@@ -68,6 +69,24 @@ try {
   if (good && appUrl) row(good.url === `${appUrl}/api/photon/webhook`, "Webhook points at this deployment", good.url === `${appUrl}/api/photon/webhook` ? appUrl : `expected ${appUrl}/api/photon/webhook`);
 } catch (e) {
   row(false, "Webhook destinations", explain(e));
+}
+
+// Shared iMessage lines only deliver texts from handles with an active assignment, and
+// only reply to them. Every demo number must be assigned, or its texts never reach us.
+try {
+  const assigned = new Set();
+  let pageToken;
+  do {
+    const page = await photon.projects.platforms.imessage.assignments.list({ path: { id }, query: pageToken ? { pageToken } : undefined });
+    for (const a of page.assignments ?? []) if (!a.releasedAt && a.handle) assigned.add(parseDemoNumbers(a.handle).handles.values().next().value ?? a.handle);
+    pageToken = page.nextPageToken;
+  } while (pageToken);
+  console.log(`  Shared-line assignments: ${assigned.size} active`);
+  for (const h of demo.handles) row(assigned.has(h), `Demo number ${maskHandle(h)} assigned to a shared line`, assigned.has(h) ? "" : "not assigned: its texts won't reach FinPilot. Assign it in the dashboard (iMessage) first.");
+} catch (e) {
+  if (e instanceof ApiError && e.status === 403) console.log("! Couldn't list shared-line assignments (key lacks platforms:read). Check in the dashboard (iMessage) that every demo number is assigned.");
+  else if (e instanceof ApiError && e.status === 404) console.log("  Shared-line assignments: not applicable (project isn't on shared iMessage lines).");
+  else console.log(`! Couldn't list shared-line assignments: ${explain(e)}`);
 }
 
 if (ok) console.log("\n→ Ready. Text the project's iMessage line from a phone to test (e.g. \"what is a W-2?\").");
